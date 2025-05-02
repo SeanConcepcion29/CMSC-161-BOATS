@@ -157,16 +157,16 @@
                 var step = 1;
 
                 switch (event.key) {
-                  case 'ArrowLeft':  // Move left (along X-axis)
+                  case 'ArrowLeft':   // Move left (along X-axis)
                       eyeX -= step;
                       break;
-                  case 'ArrowRight': // Move right
+                  case 'ArrowRight':  // Move right
                       eyeX += step;
                       break;
-                  case 'ArrowUp':          // Move up (along Y-axis)
+                  case 'ArrowUp':     // Move up (along Y-axis)
                       eyeY += step;
                       break;
-                  case 'ArrowDown':          // Move down
+                  case 'ArrowDown':   // Move down
                       eyeY -= step;
                       break;
                 }
@@ -178,25 +178,41 @@
                 updateEyePosition();
             }
 
-            /* Function for updating eye postion based on scroll */
+            /* Function for updating projection matrix */
+            function updatePerspective(){
+              /* Retrieves perspective from the input fields */
+              fieldOfViewYAxis = glMatrix.toRadian(parseFloat(document.getElementById("zoomAngle").value));
+
+              /* Updates Projection Matrix*/
+              projectionMatrix = mat4.create();
+              mat4.perspective(projectionMatrix, fieldOfViewYAxis, aspectRatio, nearPlane, farPlane);
+              gl.uniformMatrix4fv(uProjectionMatrixPointer, false, new Float32Array(projectionMatrix));
+            }
+
+            updatePerspective()
+
+
+            /* Function for updating zoom based on scroll */
+
             function updateEyeOnScroll(event) {
               event.preventDefault(); // Prevent page from scrolling
-              
-              var eyeZ = parseFloat(document.getElementById("eyeZ").value);
+
+              var zoomAngle = parseFloat(document.getElementById("zoomAngle").value);
               
               var step = 1;
           
-              // Scrolling up decreases Z (moves forward), down increases Z (moves back)
+              // Scrolling up increases zoom (moves forward), down decreases zoom (moves back)
               if (event.deltaY < 0) {
-                  eyeZ += step;
+                  zoomAngle -= step;
               } else {
-                  eyeZ -= step;
+                  zoomAngle += step;
               }
-          
-              document.getElementById("eyeZ").value = eyeZ.toFixed(2);
 
-              updateEyePosition();
-          }
+              // Update perspective
+              document.getElementById("zoomAngle").value = zoomAngle.toFixed(2);
+
+              updatePerspective()
+            }
 
 
 
@@ -461,6 +477,11 @@
         <label for="eyeZ">Z</label>
         <input type="range" id="eyeZ" step="0.1" min="-20" max="20" value="-20" style="margin-right: 10px;"><br><br>
 
+        <!-- Sliders for changing zoom -->
+        <label style="margin-right: 20px; font-weight: bold;">ZOOM</label><br>
+
+        <label for="zoomAngle">Z</label>
+        <input type="range" id="zoomAngle" step="0.1" min="5" max="40" value="20" style="margin-right: 10px;"><br><br>
 
         <!-- Sliders for changing light position -->
         <label style="margin-right: 20px; font-weight: bold;">LIGHT DIRECTION</label><br>
