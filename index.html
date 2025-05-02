@@ -1,27 +1,27 @@
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
     <title> B.O.A.T.S. </title>
 
 
     <!-- VERTEX SHADER -->
     <script type="x-shader/x-vertex" id="vshader">
-    attribute vec4 aPosition;
-    attribute vec4 aNormal;   
+      attribute vec4 aPosition;
+      attribute vec4 aNormal;   
 
-    uniform mat4 uModelMatrix;                
-    uniform mat4 uViewMatrix;                 
-    uniform mat4 uProjectionMatrix;           
+      uniform mat4 uModelMatrix;                
+      uniform mat4 uViewMatrix;                 
+      uniform mat4 uProjectionMatrix;           
 
-    uniform mat4 uNormalMatrix;              
-    
-    uniform vec4 uMaterialDiffuseColor;       
-    uniform vec4 uLightDiffuseColor;          
-    uniform vec4 uLightDirectionVector;   
+      uniform mat4 uNormalMatrix;              
+      
+      uniform vec4 uMaterialDiffuseColor;       
+      uniform vec4 uLightDiffuseColor;          
+      uniform vec4 uLightDirectionVector;   
 
-    varying vec4 vDiffuseColor;
+      varying vec4 vDiffuseColor;
 
-    void main() {
+      void main() {
         gl_Position = uProjectionMatrix * uViewMatrix * uModelMatrix * aPosition;
 
         vec4 corrected_aNormal = uNormalMatrix * aNormal;
@@ -32,18 +32,20 @@
 
         vec4 diffuseColor =  uMaterialDiffuseColor * uLightDiffuseColor * lambertCoefficient;
         vDiffuseColor = vec4(diffuseColor.r, diffuseColor.g, diffuseColor.b, 1.0);
-    }
+      }
     </script>
 
 
     <!-- FRAGMENT SHADER -->
     <script type="x-shader/x-fragment" id="fshader">
-    precision mediump float;
-    varying vec4 vDiffuseColor;
-    
-    void main() {
+
+      precision mediump float;
+      varying vec4 vDiffuseColor;
+      
+      void main() {
         gl_FragColor = vDiffuseColor;
-    }
+      }
+
     </script>
 
 
@@ -157,18 +159,18 @@
                 var step = 1;
 
                 switch (event.key) {
-                case 'ArrowLeft':  // Move left (along X-axis)
-                    eyeX -= step;
-                    break;
-                case 'ArrowRight': // Move right
-                    eyeX += step;
-                    break;
-                case 'ArrowUp':          // Move up (along Y-axis)
-                    eyeY += step;
-                    break;
-                case 'ArrowDown':          // Move down
-                    eyeY -= step;
-                    break;
+                  case 'ArrowLeft':   // Move left (along X-axis)
+                      eyeX -= step;
+                      break;
+                  case 'ArrowRight':  // Move right
+                      eyeX += step;
+                      break;
+                  case 'ArrowUp':     // Move up (along Y-axis)
+                      eyeY += step;
+                      break;
+                  case 'ArrowDown':   // Move down
+                      eyeY -= step;
+                      break;
                 }
 
                 /* Update input values in HTML */
@@ -178,27 +180,41 @@
                 updateEyePosition();
             }
 
-            /* Function for updating eye postion based on scroll */
-            function updateEyeOnScroll(event) {
-            event.preventDefault(); // Prevent page from scrolling
-            
-            var eyeZ = parseFloat(document.getElementById("eyeZ").value);
-            
-            var step = 1;
-        
-            // Scrolling up decreases Z (moves forward), down increases Z (moves back)
-            if (event.deltaY < 0) {
-                eyeZ += step;
-            } else {
-                eyeZ -= step;
+            /* Function for updating projection matrix */
+            function updatePerspective(){
+              /* Retrieves perspective from the input fields */
+              fieldOfViewYAxis = glMatrix.toRadian(parseFloat(document.getElementById("zoomAngle").value));
+
+              /* Updates Projection Matrix*/
+              projectionMatrix = mat4.create();
+              mat4.perspective(projectionMatrix, fieldOfViewYAxis, aspectRatio, nearPlane, farPlane);
+              gl.uniformMatrix4fv(uProjectionMatrixPointer, false, new Float32Array(projectionMatrix));
             }
-        
-            document.getElementById("eyeZ").value = eyeZ.toFixed(2);
 
-            updateEyePosition();
-        }
+            updatePerspective()
 
 
+            /* Function for updating zoom based on scroll */
+
+            function updateEyeOnScroll(event) {
+              event.preventDefault(); // Prevent page from scrolling
+
+              var zoomAngle = parseFloat(document.getElementById("zoomAngle").value);
+              
+              var step = 1;
+          
+              // Scrolling up increases zoom (moves forward), down decreases zoom (moves back)
+              if (event.deltaY < 0) {
+                  zoomAngle -= step;
+              } else {
+                  zoomAngle += step;
+              }
+
+              // Update perspective
+              document.getElementById("zoomAngle").value = zoomAngle.toFixed(2);
+
+              updatePerspective()
+            }
 
 
 
@@ -296,6 +312,16 @@
                 -1.0,  1.0,  1.0, 1.0,
                 -1.0,  1.0, -1.0, 1.0
             ];
+
+
+            /* Binds the vertex buffer and load data */
+            var verticesBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, verticesBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+            /* Sets up vertex attribute pointer */
+            gl.vertexAttribPointer(aPositionPointer, 4, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(aPositionPointer);
 
             
             /* Sets up the indices of the vertices */
@@ -420,7 +446,6 @@
                 16, 18, 19
                 ];
 
-
             /* Binds the normal buffer and load data */
             var normalBuffer = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
@@ -453,9 +478,8 @@
             /* Sets up vertex attribute pointer */
             gl.vertexAttribPointer(aPositionPointer, 4, gl.FLOAT, false, 0, 0);
             gl.enableVertexAttribArray(aPositionPointer);
+
             
-
-
 
             /* Variables for wave animation */
             let startTime = Date.now(); 
@@ -463,7 +487,7 @@
 
             /* Function for toggling rotation on button press */
             function toggleAnimation() {
-            waveEnabled = !waveEnabled;
+              waveEnabled = !waveEnabled;
             }
 
             window.toggleAnimation = toggleAnimation;
@@ -478,6 +502,7 @@
 
                 /* Clears screen */
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
 
                 /* Draw the boat first (if waves are enabled) */
                 if (waveEnabled) {
@@ -539,6 +564,7 @@
 
                 for (let i = 0; i < 12; i++) {
                     for (let j = 0; j < 12; j++) {
+
                         let tempModelMatrix = mat4.clone(modelMatrix);
 
                         /* Determines wave height */
@@ -549,23 +575,27 @@
 
                         /* Moves the cube into correct position */
                         mat4.translate(tempModelMatrix, tempModelMatrix, [
-                            (i - 5),  
+                            (i - 5) ,  
                             waveHeight,
-                            (j - 5)
+                            (j - 5) ,   
                         ]);
 
                         /* Applies scaling to shrink the cubes */
                         let scaleMatrix = mat4.create();
+
                         mat4.scale(scaleMatrix, scaleMatrix, [0.5, 0.5, 0.5]);
                         mat4.multiply(tempModelMatrix, tempModelMatrix, scaleMatrix);
 
                         /* Updates normal matrix */
                         gl.uniformMatrix4fv(uModelMatrixPointer, false, tempModelMatrix);
 
+
                         let tempNormalMatrix = mat4.create();
                         mat4.invert(tempNormalMatrix, tempModelMatrix);
                         mat4.transpose(tempNormalMatrix, tempNormalMatrix);
+
                         gl.uniformMatrix4fv(uNormalMatrixPtr, false, tempNormalMatrix);
+
 
                         /* Draws the cube */
                         gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0);
@@ -574,6 +604,7 @@
 
                 requestAnimationFrame(render);
             }
+
             render();
 
             /* Retrieves values of the input sliders */
@@ -597,15 +628,16 @@
 
     
     </script>
-</head>
+
+  </head>
 
 
 
-<body onload="main()" style="margin: 0; height: 100%; overflow: hidden;">
+  <body onload="main()" style="margin: 0; height: 100%; overflow: hidden;">
     <div style="display: flex;">
 
-    <!-- Left side: User Interface Card -->
-    <div style="width: 300px; background-color: #f9f9f9; padding: 20px;  overflow-y: auto;">
+      <!-- Left side: User Interface Card -->
+      <div style="width: 300px; background-color: #f9f9f9; padding: 20px;  overflow-y: auto;">
 
         <img src="boats-logo.PNG" alt="Wave Simulation" style="width: 100%; margin-top: 20px; border-radius: 8px;"><br>
 
@@ -626,6 +658,12 @@
         <label for="eyeZ">Z</label>
         <input type="range" id="eyeZ" step="0.1" min="-20" max="20" value="-20" style="margin-right: 10px;"><br><br>
 
+
+        <!-- Sliders for changing zoom -->
+        <label style="margin-right: 20px; font-weight: bold;">ZOOM</label><br>
+
+        <label for="zoomAngle">Z</label>
+        <input type="range" id="zoomAngle" step="0.1" min="5" max="40" value="20" style="margin-right: 10px;"><br><br>
 
         <!-- Sliders for changing light position -->
         <label style="margin-right: 20px; font-weight: bold;">LIGHT DIRECTION</label><br>
@@ -651,14 +689,16 @@
 
         <label for="lightB" style="color: blue;">B</label>
         <input type="range" id="lightB" step="0.05" min="0" max="1" value="1" style="margin-right: 10px;"><br><br>
-    </div>
 
-    <!-- Right side: Canvas -->
-    <div style="flex-grow: 1; display: flex; justify-content: center; align-items: center; height: 100vh;">
+      </div>
+
+      <!-- Right side: Canvas -->
+      <div style="flex-grow: 1; display: flex; justify-content: center; align-items: center; height: 100vh;">
         <canvas id="main_canvas" width="1600" height="900" ></canvas>
+      </div>
     </div>
-    </div>
-</body>
+  </body>
+
 </html>
 
 
