@@ -146,8 +146,57 @@
 
             updateEyePosition();
 
+            /* Function for updating eye postion based on key press */
+            function updateEyeOnKeydown(event){
 
+                /* Retrieves the eye position from the input fields */
+                var eyeX = parseFloat(document.getElementById("eyeX").value);
+                var eyeY = parseFloat(document.getElementById("eyeY").value);
+                var eyeZ = parseFloat(document.getElementById("eyeZ").value);
 
+                var step = 1;
+
+                switch (event.key) {
+                  case 'ArrowLeft':  // Move left (along X-axis)
+                      eyeX -= step;
+                      break;
+                  case 'ArrowRight': // Move right
+                      eyeX += step;
+                      break;
+                  case 'ArrowUp':          // Move up (along Y-axis)
+                      eyeY += step;
+                      break;
+                  case 'ArrowDown':          // Move down
+                      eyeY -= step;
+                      break;
+                }
+
+                /* Update input values in HTML */
+                document.getElementById("eyeX").value = eyeX.toFixed(2);
+                document.getElementById("eyeY").value = eyeY.toFixed(2);
+
+                updateEyePosition();
+            }
+
+            /* Function for updating eye postion based on scroll */
+            function updateEyeOnScroll(event) {
+              event.preventDefault(); // Prevent page from scrolling
+              
+              var eyeZ = parseFloat(document.getElementById("eyeZ").value);
+              
+              var step = 1;
+          
+              // Scrolling up decreases Z (moves forward), down increases Z (moves back)
+              if (event.deltaY < 0) {
+                  eyeZ += step;
+              } else {
+                  eyeZ -= step;
+              }
+          
+              document.getElementById("eyeZ").value = eyeZ.toFixed(2);
+
+              updateEyePosition();
+          }
 
 
 
@@ -167,8 +216,7 @@
             var uMaterialDiffuseColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
             gl.uniform4f(uMaterialDiffuseColorPtr, 0.0, 0.850, 1.0, 1.0);
 
-
-
+            
 
             /* Function for changing the values of the light components (RGB) */
             function updateLightColor() {
@@ -375,6 +423,11 @@
             document.getElementById("lightR").addEventListener("input", updateLightColor);
             document.getElementById("lightG").addEventListener("input", updateLightColor);
             document.getElementById("lightB").addEventListener("input", updateLightColor);
+            
+
+            /* Event Listeners for input */
+            document.addEventListener('keydown', updateEyeOnKeydown)
+            document.addEventListener('wheel', updateEyeOnScroll, { passive: false });
         }
 
     
