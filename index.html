@@ -552,6 +552,53 @@
                   gl.uniform4fv(originalColorPtr, new Float32Array(originalColor));
               }
 
+              if (!waveEnabled) {
+                  const boatBob = Math.sin((elapsedTime * 2) * 2.0) * 0.05;
+                  const boatX = 0;
+                  const boatZ = 0;
+                  const waveUnderBoat = Math.sin(elapsedTime * 2.0) * 0.05;
+                  
+                  // Save original material color
+                  const originalColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
+                  const originalColor = [0.0, 0.850, 1.0, 1.0];
+                  
+                  // Set boat color (brown)
+                  gl.uniform4f(originalColorPtr, 0.55, 0.27, 0.07, 1.0);
+                  
+                  // Boat hull (hollow structure)
+                  for (let i = 0; i < 8; i++) { // length
+                      for (let j = 0; j < 5; j++) { // width
+                          // Only draw outer walls
+                          if (j === 0 || j === 4 || i === 0 || i === 7) {
+                              let tempModelMatrix = mat4.clone(modelMatrix);
+                              
+                              mat4.translate(tempModelMatrix, tempModelMatrix, [
+                                  boatX + (j - 2) * 0.6,
+                                  waveUnderBoat + 1.0 + boatBob, 
+                                  boatZ + (i - 3.5) * 0.6
+                              ]);
+                              
+                              let scaleMatrix = mat4.create();
+                              // Taller and narrower cubes for hull
+                              mat4.scale(scaleMatrix, scaleMatrix, [0.6, 0.8, 0.6]);
+                              mat4.multiply(tempModelMatrix, tempModelMatrix, scaleMatrix);
+                              
+                              gl.uniformMatrix4fv(uModelMatrixPointer, false, new Float32Array(tempModelMatrix));
+                              
+                              let tempNormalMatrix = mat4.create();
+                              mat4.invert(tempNormalMatrix, tempModelMatrix);
+                              mat4.transpose(tempNormalMatrix, tempNormalMatrix);
+                              gl.uniformMatrix4fv(uNormalMatrixPtr, false, new Float32Array(tempNormalMatrix));
+                              
+                              gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0);
+                          }
+                      }
+                  }
+                  
+                  // Restore original material color for waves
+                  gl.uniform4fv(originalColorPtr, new Float32Array(originalColor));
+              }
+
 
                 /* Now draw the wave cubes */
                 gl.bindBuffer(gl.ARRAY_BUFFER, verticesBuffer);
@@ -587,14 +634,14 @@
                         mat4.multiply(tempModelMatrix, tempModelMatrix, scaleMatrix);
 
                         /* Updates normal matrix */
-                        gl.uniformMatrix4fv(uModelMatrixPointer, false, tempModelMatrix);
+                        gl.uniformMatrix4fv(uModelMatrixPointer, false, new Float32Array(tempModelMatrix));
 
 
                         let tempNormalMatrix = mat4.create();
                         mat4.invert(tempNormalMatrix, tempModelMatrix);
                         mat4.transpose(tempNormalMatrix, tempNormalMatrix);
 
-                        gl.uniformMatrix4fv(uNormalMatrixPtr, false, tempNormalMatrix);
+                        gl.uniformMatrix4fv(uNormalMatrixPtr, false, new Float32Array(tempModelMatrix));
 
 
                         /* Draws the cube */
