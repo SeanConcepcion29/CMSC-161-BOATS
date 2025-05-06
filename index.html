@@ -15,22 +15,49 @@
 
       uniform mat4 uNormalMatrix;              
       
-      uniform vec4 uMaterialDiffuseColor;       
-      uniform vec4 uLightDiffuseColor;          
-      uniform vec4 uLightDirectionVector;   
+      uniform vec4 uMaterialDiffuseColor;     
+      uniform vec4 uMaterialSpecularColor;  
+      uniform vec4 uMaterialAmbientColor;     
+
+      uniform vec4 uLightColor;    
+
+      uniform vec4 uLightDirectionVector;      
+      uniform vec4 uEyeVector;                 
+      uniform vec4 uReflectedLightVector;       
+
+      varying vec4 vAmbientColor;
+
+      varying vec4 vSpecularColor;
 
       varying vec4 vDiffuseColor;
 
       void main() {
         gl_Position = uProjectionMatrix * uViewMatrix * uModelMatrix * aPosition;
+  
+        //Ambient
+        float ambientStrength = 0.1;
+        vec4 ambient = ambientStrength * uLightColor;
 
+        //Diffuse
         vec4 corrected_aNormal = uNormalMatrix * aNormal;
         vec4 normalized_aNormalVector = normalize(corrected_aNormal);
         vec4 normalized_uLightDirectionVector = normalize(uLightDirectionVector);
-
         float lambertCoefficient = max(dot(-normalized_uLightDirectionVector, normalized_aNormalVector), 0.0);
 
-        vec4 diffuseColor =  uMaterialDiffuseColor * uLightDiffuseColor * lambertCoefficient;
+        //Specular
+        float specularStrength = 1.0;
+        vec4 viewPos = uViewMatrix * uModelMatrix * aPosition;
+        vec4 normalized_uEyeVector = normalize(-viewPos); 
+        vec4 normalized_uReflectedLightVector = normalize(2.0 * dot(-normalized_uLightDirectionVector,normalized_aNormalVector) * normalized_aNormalVector - normalized_uLightDirectionVector);
+        float specularAngle = max(dot(normalized_uEyeVector,normalized_uReflectedLightVector),0.0);
+        float specular = pow(specularAngle, 32.0);
+
+        vec4 ambientColor = ambient * uLightColor * uMaterialDiffuseColor;
+        vec4 specularColor = specularStrength * specular * uLightColor * uMaterialDiffuseColor;
+        vec4 diffuseColor =  lambertCoefficient * uLightColor * uMaterialDiffuseColor ;
+        
+        vAmbientColor = vec4(ambientColor.r, ambientColor.g, ambientColor.b, 1.0);
+        vSpecularColor = vec4(specularColor.r, specularColor.g, specularColor.b, 1.0);
         vDiffuseColor = vec4(diffuseColor.r, diffuseColor.g, diffuseColor.b, 1.0);
       }
     </script>
@@ -41,9 +68,12 @@
 
       precision mediump float;
       varying vec4 vDiffuseColor;
-      
+      varying vec4 vSpecularColor;
+      varying vec4 vAmbientColor;
+
       void main() {
-        gl_FragColor = vDiffuseColor;
+        gl_FragColor = vAmbientColor + vDiffuseColor + vSpecularColor;
+        
       }
 
     </script>
@@ -245,7 +275,7 @@
                 var lightColor = [lightR, lightG, lightB, 1.0];
 
                 /* Updates the light color */
-                var uLightDiffuseColorPtr = gl.getUniformLocation(program, "uLightDiffuseColor");
+                var uLightDiffuseColorPtr = gl.getUniformLocation(program, "uLightColor");
                 gl.uniform4fv(uLightDiffuseColorPtr, new Float32Array(lightColor));
             }
 
@@ -269,6 +299,10 @@
             }
 
             updateLightDirection()
+
+
+            var uMaterialAmbientColorPtr = gl.getUniformLocation(program,"uMaterialAmbientColor");
+            gl.uniform4f(uMaterialAmbientColorPtr, 0.2, 0.2, 0.2, 1.0); 
 
 
 
