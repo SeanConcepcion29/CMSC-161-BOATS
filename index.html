@@ -2,7 +2,7 @@
 <html>
   <head>
     <title> B.O.A.T.S. </title>
-
+    <link rel="stylesheet" href="styles.css">
 
     <!-- VERTEX SHADER -->
     <script type="x-shader/x-vertex" id="vshader">
@@ -464,6 +464,8 @@
             /* Function for toggling rotation on button press */
             function toggleAnimation() {
               waveEnabled = !waveEnabled;
+              if(waveEnabled) { document.querySelector("#animationbtn").innerText = "OFF"; }
+              else if(!waveEnabled) { document.querySelector("#animationbtn").innerText = "ON"; }
             }
 
             window.toggleAnimation = toggleAnimation;
@@ -508,7 +510,7 @@
                 }
 
                 // Common scaling and rotation
-                mat4.scale(boatModelMatrix, boatModelMatrix, [0.02, 0.02, 0.02]);
+                mat4.scale(boatModelMatrix, boatModelMatrix, [0.015, 0.015, 0.015]);
                 mat4.rotateX(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90));
                 
                 gl.uniformMatrix4fv(uModelMatrixPointer, false, boatModelMatrix);
@@ -543,24 +545,19 @@
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
 
-                /* Draw the boat first (if waves are enabled) */
-                if (waveEnabled) {
-                  
-                //   // Save original material color
+                /* Draw the boat first */
+                if (waveEnabled) {     
                   const originalColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
                   const originalColor = [0.0, 0.850, 1.0, 1.0];
-                  
-                  // Set boat color (purple)
-                  gl.uniform4f(originalColorPtr, 0.85, 0., 0.85, 1.0);
-                    renderBoat(elapsedTime); // Pass elapsedTime here
-                  // Restore original material color for waves
+                  gl.uniform4f(originalColorPtr, 0.7, 0.7, 0.7, 1.0);
+                  renderBoat(elapsedTime); 
                   gl.uniform4fv(originalColorPtr, new Float32Array(originalColor));
                 } 
+
                 else {
                     const originalColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
                     const originalColor = [0.0, 0.850, 1.0, 1.0];
-                // Draw static boat when waves are  // Set boat color (purple)
-                    gl.uniform4f(originalColorPtr, 0.85, 0., 0.85, 1.0);
+                    gl.uniform4f(originalColorPtr, 0.7, 0.7, 0.7, 1.0);
                     renderBoat(elapsedTime);  
                     gl.uniform4fv(originalColorPtr, new Float32Array(originalColor));
                 }
@@ -675,8 +672,6 @@
             document.getElementById("lightB").addEventListener("input", updateLightColor);
 
 
-            // document.getElementById("lightingbtn").addEventListener("click", toggleLighting);
-
             /* Event Listeners for input */
             document.addEventListener('keydown', updateEyeOnKeydown)
             document.addEventListener('wheel', updateEyeOnScroll, { passive: false });
@@ -690,74 +685,69 @@
 
   </head>
 
+  <body onload="main()">
+    <div class="container">
+  
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <img src="boats-logo.PNG" alt="Wave Simulation" class="logo">
+  
+        <label class="section-title-btn">SIMULATE WAVE</label>
+        <button id="animationbtn" onclick="toggleAnimation()">ON</button>
+  
+        <div class="section">
+          <label class="section-title">EYE POSITION</label>
 
+          <label for="eyeX">X</label>
+          <input type="range" id="eyeX" step="0.1" min="-20" max="25" value="25"><br/>
+  
+          <label for="eyeY">Y</label>
+          <input type="range" id="eyeY" step="0.1" min="-20" max="20" value="17"><br/>
+  
+          <label for="eyeZ">Z</label>
+          <input type="range" id="eyeZ" step="0.1" min="-20" max="20" value="-20"><br/>
+        </div>
+  
+        <div class="section">
+          <label class="section-title">ZOOM</label>
+          <label for="zoomAngle">Z</label>
+          <input type="range" id="zoomAngle" step="0.1" min="5" max="40" value="20">
+        </div>
+  
+        <div class="section">
+          <label class="section-title">LIGHT DIRECTION</label>
 
-  <body onload="main()" style="margin: 0; height: 100%; overflow: hidden;">
-    <div style="display: flex;">
-
-      <!-- Left side: User Interface Card -->
-      <div style="width: 300px; background-color: #f9f9f9; padding: 20px;  overflow-y: auto;">
-
-        <img src="boats-logo.PNG" alt="Wave Simulation" style="width: 100%; margin-top: 20px; border-radius: 8px;"><br>
-
-        <label style="margin-right: 5px; font-weight: bold;">SIMULATE WAVE</label>
-        <button style="margin-right: 30px;" onclick="toggleAnimation()">ON</button>
-
-        <br><br>
-
-        <!-- Sliders for changing eye position -->
-        <label style="margin-right: 20px; font-weight: bold;">EYE POSITION</label><br>
-
-        <label for="eyeX">X</label>
-        <input type="range" id="eyeX" step="0.1" min="-20" max="25" value="25" style="margin-right: 10px;"><br>
-
-        <label for="eyeY">Y</label>
-        <input type="range" id="eyeY" step="0.1" min="-20" max="20" value="17" style="margin-right: 10px;"><br>
-
-        <label for="eyeZ">Z</label>
-        <input type="range" id="eyeZ" step="0.1" min="-20" max="20" value="-20" style="margin-right: 10px;"><br><br>
-
-
-        <!-- Sliders for changing zoom -->
-        <label style="margin-right: 20px; font-weight: bold;">ZOOM</label><br>
-
-        <label for="zoomAngle">Z</label>
-        <input type="range" id="zoomAngle" step="0.1" min="5" max="40" value="20" style="margin-right: 10px;"><br><br>
-
-        <!-- Sliders for changing light position -->
-        <label style="margin-right: 20px; font-weight: bold;">LIGHT DIRECTION</label><br>
-
-        <label for="lightX">X</label>
-        <input type="range" id="lightX" step="0.1" min="-20" max="20" value="1.0" style="margin-right: 10px;"><br>
-
-        <label for="lightY">Y</label>
-        <input type="range" id="lightY" step="0.1" min="-20" max="20" value="3.0" style="margin-right: 10px;"><br>
-
-        <label for="lightZ">Z</label>
-        <input type="range" id="lightZ" step="0.1" min="-20" max="20" value="5.0" style="margin-right: 10px;"><br><br>
-
-
-        <!-- Sliders for changing light color -->
-        <label style="margin-right: 20px; font-weight: bold;">LIGHT COLOR</label><br>
-
-        <label for="lightR" style="color: red;">R</label>
-        <input type="range" id="lightR" step="0.05" min="0" max="1" value="0.5" style="margin-right: 10px;"><br>
-
-        <label for="lightG" style="color: green;">G</label>
-        <input type="range" id="lightG" step="0.05" min="0" max="1" value="1" style="margin-right: 10px;"><br>
-
-        <label for="lightB" style="color: blue;">B</label>
-        <input type="range" id="lightB" step="0.05" min="0" max="1" value="1" style="margin-right: 10px;"><br><br>
-
-        <label style="margin-right: 5px; font-weight: bold;">SET TIME TO: </label>
-        <button style="margin-right: 30px;"  id="lightingbtn" onclick="toggleLighting()">DAY</button>
-
+          <label for="lightX">X</label>
+          <input type="range" id="lightX" step="0.1" min="-20" max="20" value="1.0"><br/>
+  
+          <label for="lightY">Y</label>
+          <input type="range" id="lightY" step="0.1" min="-20" max="20" value="3.0"><br/>
+  
+          <label for="lightZ">Z</label>
+          <input type="range" id="lightZ" step="0.1" min="-20" max="20" value="5.0"><br/>
+        </div>
+  
+        <div class="section">
+          <label class="section-title">LIGHT COLOR</label>
+          <label for="lightR" class="color-label red">R</label>
+          <input type="range" id="lightR" step="0.05" min="0" max="1" value="1"><br/>
+  
+          <label for="lightG" class="color-label green">G</label>
+          <input type="range" id="lightG" step="0.05" min="0" max="1" value="1"><br/>
+  
+          <label for="lightB" class="color-label blue">B</label>
+          <input type="range" id="lightB" step="0.05" min="0" max="1" value="1"><br/>
+        </div>
+  
+        <label class="section-title-btn">SET TIME TO </label>
+        <button id="lightingbtn" onclick="toggleLighting()">DAY</button>
       </div>
-
-      <!-- Right side: Canvas -->
-      <div style="flex-grow: 1; display: flex; justify-content: center; align-items: center; height: 100vh;">
-        <canvas id="main_canvas" width="1600" height="900" ></canvas>
+  
+      <!-- Canvas area -->
+      <div class="canvas-container">
+        <canvas id="main_canvas" width="1600" height="900"></canvas>
       </div>
+  
     </div>
   </body>
 
