@@ -1,49 +1,82 @@
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
     <title> B.O.A.T.S. </title>
 
 
     <!-- VERTEX SHADER -->
     <script type="x-shader/x-vertex" id="vshader">
-    attribute vec4 aPosition;
-    attribute vec4 aNormal;   
+      attribute vec4 aPosition;
+      attribute vec4 aNormal;   
 
-    uniform mat4 uModelMatrix;                
-    uniform mat4 uViewMatrix;                 
-    uniform mat4 uProjectionMatrix;           
+      uniform mat4 uModelMatrix;                
+      uniform mat4 uViewMatrix;                 
+      uniform mat4 uProjectionMatrix;           
 
-    uniform mat4 uNormalMatrix;              
-    
-    uniform vec4 uMaterialDiffuseColor;       
-    uniform vec4 uLightDiffuseColor;          
-    uniform vec4 uLightDirectionVector;   
+      uniform mat4 uNormalMatrix;              
+      
+      uniform vec4 uMaterialDiffuseColor;     
+      uniform vec4 uMaterialSpecularColor;  
+      uniform vec4 uMaterialAmbientColor;     
 
-    varying vec4 vDiffuseColor;
+      uniform vec4 uLightColor;    
 
-    void main() {
+      uniform vec4 uLightDirectionVector;      
+      uniform vec4 uEyeVector;                 
+      uniform vec4 uReflectedLightVector;    
+      
+      uniform float uSpecularStrength;
+      uniform float uAmbientStrength;
+
+      varying vec4 vAmbientColor;
+
+      varying vec4 vSpecularColor;
+
+      varying vec4 vDiffuseColor;
+
+      void main() {
         gl_Position = uProjectionMatrix * uViewMatrix * uModelMatrix * aPosition;
+  
+        //Ambient
+        vec4 ambient = uAmbientStrength * uLightColor;
 
+        //Diffuse
         vec4 corrected_aNormal = uNormalMatrix * aNormal;
         vec4 normalized_aNormalVector = normalize(corrected_aNormal);
         vec4 normalized_uLightDirectionVector = normalize(uLightDirectionVector);
+        float lambertCoefficient = max(dot(normalized_uLightDirectionVector, normalized_aNormalVector), 0.0);
 
-        float lambertCoefficient = max(dot(-normalized_uLightDirectionVector, normalized_aNormalVector), 0.0);
+        //Specular
+        vec4 viewPos = uViewMatrix * uModelMatrix * aPosition;
+        vec4 normalized_uEyeVector = normalize(-viewPos); 
+        vec4 normalized_uReflectedLightVector = normalize(2.0 * dot(normalized_uLightDirectionVector,normalized_aNormalVector) * normalized_aNormalVector - normalized_uLightDirectionVector);
+        float specularAngle = max(dot(normalized_uEyeVector,normalized_uReflectedLightVector),0.0);
+        float specular = pow(specularAngle, 16.0);
 
-        vec4 diffuseColor =  uMaterialDiffuseColor * uLightDiffuseColor * lambertCoefficient;
+        vec4 ambientColor = ambient * uLightColor * uMaterialDiffuseColor;
+        vec4 specularColor = uSpecularStrength * specular * uLightColor * uMaterialDiffuseColor;
+        vec4 diffuseColor =  lambertCoefficient * uLightColor * uMaterialDiffuseColor ;
+        
+        vAmbientColor = vec4(ambientColor.r, ambientColor.g, ambientColor.b, 1.0);
+        vSpecularColor = vec4(specularColor.r, specularColor.g, specularColor.b, 1.0);
         vDiffuseColor = vec4(diffuseColor.r, diffuseColor.g, diffuseColor.b, 1.0);
-    }
+      }
     </script>
 
 
     <!-- FRAGMENT SHADER -->
     <script type="x-shader/x-fragment" id="fshader">
-    precision mediump float;
-    varying vec4 vDiffuseColor;
-    
-    void main() {
-        gl_FragColor = vDiffuseColor;
-    }
+
+      precision mediump float;
+      varying vec4 vDiffuseColor;
+      varying vec4 vSpecularColor;
+      varying vec4 vAmbientColor;
+
+      void main() {
+        gl_FragColor = vAmbientColor + vDiffuseColor + vSpecularColor;
+        
+      }
+
     </script>
 
     </script>
@@ -179,18 +212,18 @@
                 var step = 1;
 
                 switch (event.key) {
-                case 'ArrowLeft':  // Move left (along X-axis)
-                    eyeX -= step;
-                    break;
-                case 'ArrowRight': // Move right
-                    eyeX += step;
-                    break;
-                case 'ArrowUp':          // Move up (along Y-axis)
-                    eyeY += step;
-                    break;
-                case 'ArrowDown':          // Move down
-                    eyeY -= step;
-                    break;
+                  case 'ArrowLeft':   // Move left (along X-axis)
+                      eyeX -= step;
+                      break;
+                  case 'ArrowRight':  // Move right
+                      eyeX += step;
+                      break;
+                  case 'ArrowUp':     // Move up (along Y-axis)
+                      eyeY += step;
+                      break;
+                  case 'ArrowDown':   // Move down
+                      eyeY -= step;
+                      break;
                 }
 
                 /* Update input values in HTML */
@@ -200,27 +233,41 @@
                 updateEyePosition();
             }
 
-            /* Function for updating eye postion based on scroll */
-            function updateEyeOnScroll(event) {
-            event.preventDefault(); // Prevent page from scrolling
-            
-            var eyeZ = parseFloat(document.getElementById("eyeZ").value);
-            
-            var step = 1;
-        
-            // Scrolling up decreases Z (moves forward), down increases Z (moves back)
-            if (event.deltaY < 0) {
-                eyeZ += step;
-            } else {
-                eyeZ -= step;
+            /* Function for updating projection matrix */
+            function updatePerspective(){
+              /* Retrieves perspective from the input fields */
+              fieldOfViewYAxis = glMatrix.toRadian(parseFloat(document.getElementById("zoomAngle").value));
+
+              /* Updates Projection Matrix*/
+              projectionMatrix = mat4.create();
+              mat4.perspective(projectionMatrix, fieldOfViewYAxis, aspectRatio, nearPlane, farPlane);
+              gl.uniformMatrix4fv(uProjectionMatrixPointer, false, new Float32Array(projectionMatrix));
             }
-        
-            document.getElementById("eyeZ").value = eyeZ.toFixed(2);
 
-            updateEyePosition();
-        }
+            updatePerspective()
 
 
+            /* Function for updating zoom based on scroll */
+
+            function updateEyeOnScroll(event) {
+              event.preventDefault(); // Prevent page from scrolling
+
+              var zoomAngle = parseFloat(document.getElementById("zoomAngle").value);
+              
+              var step = 1;
+          
+              // Scrolling up increases zoom (moves forward), down decreases zoom (moves back)
+              if (event.deltaY < 0) {
+                  zoomAngle -= step;
+              } else {
+                  zoomAngle += step;
+              }
+
+              // Update perspective
+              document.getElementById("zoomAngle").value = zoomAngle.toFixed(2);
+
+              updatePerspective()
+            }
 
 
 
@@ -251,7 +298,7 @@
                 var lightColor = [lightR, lightG, lightB, 1.0];
 
                 /* Updates the light color */
-                var uLightDiffuseColorPtr = gl.getUniformLocation(program, "uLightDiffuseColor");
+                var uLightDiffuseColorPtr = gl.getUniformLocation(program, "uLightColor");
                 gl.uniform4fv(uLightDiffuseColorPtr, new Float32Array(lightColor));
             }
 
@@ -268,6 +315,8 @@
                 var lightZ = parseFloat(document.getElementById("lightZ").value);
 
                 var lightDirection = [lightX, lightY, lightZ, 0.0];
+                
+                console.log(lightX, lightY, lightZ);
 
                 /* Updates the light direction  */
                 var uLightDirectionVectorPtr = gl.getUniformLocation(program, "uLightDirectionVector");
@@ -277,6 +326,36 @@
             updateLightDirection()
 
 
+            /* Retrieve location of specular and ambient strength to update light intensity */
+            var uSpecularStrengthPtr = gl.getUniformLocation(program, "uSpecularStrength");
+            var uAmbientStrengthPtr = gl.getUniformLocation(program, "uAmbientStrength");
+
+            /* Function to set light intensity based on time of day */
+            var currentTime = new Date();
+            var currentHour = currentTime.getHours(); 
+
+            function updateLightIntensity(){
+
+              // If time is between 6 AM to 5 PM, set light intensity to bright
+              if(currentHour < 18 && currentHour >= 6){
+                gl.uniform1f(uSpecularStrengthPtr, 0.8);
+                gl.uniform1f(uAmbientStrengthPtr, 0.3);
+
+                // Change button text to NIGHT
+                document.querySelector("#lightingbtn").innerText = "NIGHT";
+              }
+
+              // If time is between 6 PM to 5 AM, set light intensity to dim
+              else{
+                gl.uniform1f(uSpecularStrengthPtr, 0.5);
+                gl.uniform1f(uAmbientStrengthPtr, 0.05);
+
+                // Change button text to DAY
+                document.querySelector("#lightingbtn").innerText = "DAY";
+              }
+            }
+            
+            updateLightIntensity();
 
 
             /* Sets up coordinates for the object */
@@ -319,6 +398,16 @@
                 -1.0,  1.0, -1.0, 1.0
             ];
 
+
+            /* Binds the vertex buffer and load data */
+            var verticesBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, verticesBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+            /* Sets up vertex attribute pointer */
+            gl.vertexAttribPointer(aPositionPointer, 4, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(aPositionPointer);
+
             
             /* Sets up the indices of the vertices */
             var indices = [
@@ -347,7 +436,6 @@
                 -1.0, 0.0, 0.0, 0.0,    -1.0, 0.0, 0.0, 0.0,    -1.0, 0.0, 0.0, 0.0,    -1.0, 0.0, 0.0, 0.0   // left
             ];
 
-
             /* Binds the normal buffer and load data */
             var normalBuffer = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
@@ -365,6 +453,8 @@
             /* Sets up vertex attribute pointer */
             gl.vertexAttribPointer(aPositionPointer, 4, gl.FLOAT, false, 0, 0);
             gl.enableVertexAttribArray(aPositionPointer);
+            
+
 
 
             /* Variables for wave animation */
@@ -373,7 +463,7 @@
 
             /* Function for toggling rotation on button press */
             function toggleAnimation() {
-            waveEnabled = !waveEnabled;
+              waveEnabled = !waveEnabled;
             }
 
             window.toggleAnimation = toggleAnimation;
@@ -410,8 +500,11 @@
                     let rockAngle = Math.sin(wavePhase * 1.3) * 0.1;
                     mat4.rotateZ(boatModelMatrix, boatModelMatrix, rockAngle);
                 } else {
-                    // Static boat - position it higher and further back
-                    mat4.translate(boatModelMatrix, boatModelMatrix, [0, 2.5, -2]);
+                   // Static boat with gentle bobbing
+                    let boatY = 1.5 + Math.sin(elapsedTime * 0.5) * 0.1; // Reduced amplitude and slower frequency
+                    mat4.translate(boatModelMatrix, boatModelMatrix, [0, boatY, 1]);
+                    let rockAngle = Math.sin(elapsedTime * 0.3) * 0.1; // Very slight rocking
+                    mat4.rotateZ(boatModelMatrix, boatModelMatrix, rockAngle);
                 }
 
                 // Common scaling and rotation
@@ -444,8 +537,11 @@
                 const elapsedTime = (now - startTime) / 1000; 
                 mat4.identity(modelMatrix); 
 
+                
+
                 /* Clears screen */
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
 
                 /* Draw the boat first (if waves are enabled) */
                 if (waveEnabled) {
@@ -461,14 +557,14 @@
                   gl.uniform4fv(originalColorPtr, new Float32Array(originalColor));
                 } 
                 else {
-            // Draw static boat when waves are off
-            const originalColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
-            const originalColor = [0.0, 0.850, 1.0, 1.0];
-            gl.uniform4f(originalColorPtr, 0.55, 0.27, 0.07, 1.0);
-            renderBoat(0);  
-            gl.uniform4fv(originalColorPtr, new Float32Array(originalColor));
-        }
-              
+                    const originalColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
+                    const originalColor = [0.0, 0.850, 1.0, 1.0];
+                // Draw static boat when waves are  // Set boat color (purple)
+                    gl.uniform4f(originalColorPtr, 0.85, 0., 0.85, 1.0);
+                    renderBoat(elapsedTime);  
+                    gl.uniform4fv(originalColorPtr, new Float32Array(originalColor));
+                }
+            
 
 
                 /* Now draw the wave cubes */
@@ -482,6 +578,7 @@
 
                 for (let i = 0; i < 12; i++) {
                     for (let j = 0; j < 12; j++) {
+
                         let tempModelMatrix = mat4.clone(modelMatrix);
 
                         /* Determines wave height */
@@ -492,23 +589,27 @@
 
                         /* Moves the cube into correct position */
                         mat4.translate(tempModelMatrix, tempModelMatrix, [
-                            (i - 5),  
+                            (i - 5) ,  
                             waveHeight,
-                            (j - 5)
+                            (j - 5) ,   
                         ]);
 
                         /* Applies scaling to shrink the cubes */
                         let scaleMatrix = mat4.create();
+
                         mat4.scale(scaleMatrix, scaleMatrix, [0.5, 0.5, 0.5]);
                         mat4.multiply(tempModelMatrix, tempModelMatrix, scaleMatrix);
 
                         /* Updates normal matrix */
-                        gl.uniformMatrix4fv(uModelMatrixPointer, false, tempModelMatrix);
+                        gl.uniformMatrix4fv(uModelMatrixPointer, false, new Float32Array(tempModelMatrix));
+
 
                         let tempNormalMatrix = mat4.create();
                         mat4.invert(tempNormalMatrix, tempModelMatrix);
                         mat4.transpose(tempNormalMatrix, tempNormalMatrix);
-                        gl.uniformMatrix4fv(uNormalMatrixPtr, false, tempNormalMatrix);
+
+                        gl.uniformMatrix4fv(uNormalMatrixPtr, false, new Float32Array(tempModelMatrix));
+
 
                         /* Draws the cube */
                         gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0);
@@ -517,7 +618,48 @@
 
                 requestAnimationFrame(render);
             }
+
             render();
+
+            if(currentHour < 18 && currentHour >= 6){
+              var daylight = true; 
+            }
+            else{
+              var daylight = false;
+            }
+            
+
+            function toggleLighting() {
+              daylight = !daylight;
+
+              if(daylight){
+                // Change background to white
+                gl.clearColor(0.0, 0.0, 0.0, 0.0);
+
+                // Change light intensity
+                gl.uniform1f(uSpecularStrengthPtr, 0.8);
+                gl.uniform1f(uAmbientStrengthPtr, 0.3);
+
+                document.querySelector("#lightingbtn").innerText = "NIGHT";
+              }
+              else{
+                 // Change background to dark gray
+                gl.clearColor(0.3, 0.3, 0.3, 1.0);
+
+                // Change light intensity
+                gl.uniform1f(uSpecularStrengthPtr, 0.5);
+                gl.uniform1f(uAmbientStrengthPtr, 0.05);
+
+                document.querySelector("#lightingbtn").innerText = "DAY";
+              }
+
+              // Update light after setting values
+              updateLightDirection();
+            };
+
+            window.toggleLighting = toggleLighting;
+            
+            
 
             /* Retrieves values of the input sliders */
             document.getElementById("eyeX").addEventListener("input", updateEyePosition);
@@ -531,24 +673,30 @@
             document.getElementById("lightR").addEventListener("input", updateLightColor);
             document.getElementById("lightG").addEventListener("input", updateLightColor);
             document.getElementById("lightB").addEventListener("input", updateLightColor);
-            
+
+
+            // document.getElementById("lightingbtn").addEventListener("click", toggleLighting);
 
             /* Event Listeners for input */
             document.addEventListener('keydown', updateEyeOnKeydown)
             document.addEventListener('wheel', updateEyeOnScroll, { passive: false });
+
+            
+              
         }
 
     
     </script>
-</head>
+
+  </head>
 
 
 
-<body onload="main()" style="margin: 0; height: 100%; overflow: hidden;">
+  <body onload="main()" style="margin: 0; height: 100%; overflow: hidden;">
     <div style="display: flex;">
 
-    <!-- Left side: User Interface Card -->
-    <div style="width: 300px; background-color: #f9f9f9; padding: 20px;  overflow-y: auto;">
+      <!-- Left side: User Interface Card -->
+      <div style="width: 300px; background-color: #f9f9f9; padding: 20px;  overflow-y: auto;">
 
         <img src="boats-logo.PNG" alt="Wave Simulation" style="width: 100%; margin-top: 20px; border-radius: 8px;"><br>
 
@@ -570,17 +718,23 @@
         <input type="range" id="eyeZ" step="0.1" min="-20" max="20" value="-20" style="margin-right: 10px;"><br><br>
 
 
+        <!-- Sliders for changing zoom -->
+        <label style="margin-right: 20px; font-weight: bold;">ZOOM</label><br>
+
+        <label for="zoomAngle">Z</label>
+        <input type="range" id="zoomAngle" step="0.1" min="5" max="40" value="20" style="margin-right: 10px;"><br><br>
+
         <!-- Sliders for changing light position -->
         <label style="margin-right: 20px; font-weight: bold;">LIGHT DIRECTION</label><br>
 
         <label for="lightX">X</label>
-        <input type="range" id="lightX" step="0.1" min="-20" max="20" value="-1.0" style="margin-right: 10px;"><br>
+        <input type="range" id="lightX" step="0.1" min="-20" max="20" value="1.0" style="margin-right: 10px;"><br>
 
         <label for="lightY">Y</label>
-        <input type="range" id="lightY" step="0.1" min="-20" max="20" value="-3.0" style="margin-right: 10px;"><br>
+        <input type="range" id="lightY" step="0.1" min="-20" max="20" value="3.0" style="margin-right: 10px;"><br>
 
         <label for="lightZ">Z</label>
-        <input type="range" id="lightZ" step="0.1" min="-20" max="20" value="-5.0" style="margin-right: 10px;"><br><br>
+        <input type="range" id="lightZ" step="0.1" min="-20" max="20" value="5.0" style="margin-right: 10px;"><br><br>
 
 
         <!-- Sliders for changing light color -->
@@ -594,14 +748,19 @@
 
         <label for="lightB" style="color: blue;">B</label>
         <input type="range" id="lightB" step="0.05" min="0" max="1" value="1" style="margin-right: 10px;"><br><br>
-    </div>
 
-    <!-- Right side: Canvas -->
-    <div style="flex-grow: 1; display: flex; justify-content: center; align-items: center; height: 100vh;">
+        <label style="margin-right: 5px; font-weight: bold;">SET TIME TO: </label>
+        <button style="margin-right: 30px;"  id="lightingbtn" onclick="toggleLighting()">DAY</button>
+
+      </div>
+
+      <!-- Right side: Canvas -->
+      <div style="flex-grow: 1; display: flex; justify-content: center; align-items: center; height: 100vh;">
         <canvas id="main_canvas" width="1600" height="900" ></canvas>
+      </div>
     </div>
-    </div>
-</body>
+  </body>
+
 </html>
 
 
