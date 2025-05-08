@@ -23,7 +23,10 @@
 
       uniform vec4 uLightDirectionVector;      
       uniform vec4 uEyeVector;                 
-      uniform vec4 uReflectedLightVector;       
+      uniform vec4 uReflectedLightVector;    
+      
+      uniform float uSpecularStrength;
+      uniform float uAmbientStrength;
 
       varying vec4 vAmbientColor;
 
@@ -35,25 +38,23 @@
         gl_Position = uProjectionMatrix * uViewMatrix * uModelMatrix * aPosition;
   
         //Ambient
-        float ambientStrength = 0.1;
-        vec4 ambient = ambientStrength * uLightColor;
+        vec4 ambient = uAmbientStrength * uLightColor;
 
         //Diffuse
         vec4 corrected_aNormal = uNormalMatrix * aNormal;
         vec4 normalized_aNormalVector = normalize(corrected_aNormal);
         vec4 normalized_uLightDirectionVector = normalize(uLightDirectionVector);
-        float lambertCoefficient = max(dot(-normalized_uLightDirectionVector, normalized_aNormalVector), 0.0);
+        float lambertCoefficient = max(dot(normalized_uLightDirectionVector, normalized_aNormalVector), 0.0);
 
         //Specular
-        float specularStrength = 1.0;
         vec4 viewPos = uViewMatrix * uModelMatrix * aPosition;
         vec4 normalized_uEyeVector = normalize(-viewPos); 
-        vec4 normalized_uReflectedLightVector = normalize(2.0 * dot(-normalized_uLightDirectionVector,normalized_aNormalVector) * normalized_aNormalVector - normalized_uLightDirectionVector);
+        vec4 normalized_uReflectedLightVector = normalize(2.0 * dot(normalized_uLightDirectionVector,normalized_aNormalVector) * normalized_aNormalVector - normalized_uLightDirectionVector);
         float specularAngle = max(dot(normalized_uEyeVector,normalized_uReflectedLightVector),0.0);
-        float specular = pow(specularAngle, 32.0);
+        float specular = pow(specularAngle, 16.0);
 
         vec4 ambientColor = ambient * uLightColor * uMaterialDiffuseColor;
-        vec4 specularColor = specularStrength * specular * uLightColor * uMaterialDiffuseColor;
+        vec4 specularColor = uSpecularStrength * specular * uLightColor * uMaterialDiffuseColor;
         vec4 diffuseColor =  lambertCoefficient * uLightColor * uMaterialDiffuseColor ;
         
         vAmbientColor = vec4(ambientColor.r, ambientColor.g, ambientColor.b, 1.0);
@@ -292,6 +293,8 @@
                 var lightZ = parseFloat(document.getElementById("lightZ").value);
 
                 var lightDirection = [lightX, lightY, lightZ, 0.0];
+                
+                console.log(lightX, lightY, lightZ);
 
                 /* Updates the light direction  */
                 var uLightDirectionVectorPtr = gl.getUniformLocation(program, "uLightDirectionVector");
@@ -301,10 +304,36 @@
             updateLightDirection()
 
 
-            var uMaterialAmbientColorPtr = gl.getUniformLocation(program,"uMaterialAmbientColor");
-            gl.uniform4f(uMaterialAmbientColorPtr, 0.2, 0.2, 0.2, 1.0); 
+            /* Retrieve location of specular and ambient strength to update light intensity */
+            var uSpecularStrengthPtr = gl.getUniformLocation(program, "uSpecularStrength");
+            var uAmbientStrengthPtr = gl.getUniformLocation(program, "uAmbientStrength");
 
+            /* Function to set light intensity based on time of day */
+            var currentTime = new Date();
+            var currentHour = currentTime.getHours(); 
 
+            function updateLightIntensity(){
+
+              // If time is between 6 AM to 5 PM, set light intensity to bright
+              if(currentHour < 18 && currentHour >= 6){
+                gl.uniform1f(uSpecularStrengthPtr, 0.8);
+                gl.uniform1f(uAmbientStrengthPtr, 0.3);
+
+                // Change button text to NIGHT
+                document.querySelector("#lightingbtn").innerText = "NIGHT";
+              }
+
+              // If time is between 6 PM to 5 AM, set light intensity to dim
+              else{
+                gl.uniform1f(uSpecularStrengthPtr, 0.5);
+                gl.uniform1f(uAmbientStrengthPtr, 0.05);
+
+                // Change button text to DAY
+                document.querySelector("#lightingbtn").innerText = "DAY";
+              }
+            }
+            
+            updateLightIntensity();
 
 
             /* Sets up coordinates for the object */
@@ -534,6 +563,8 @@
 
                 mat4.identity(modelMatrix); 
 
+                
+
                 /* Clears screen */
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -688,6 +719,46 @@
 
             render();
 
+            if(currentHour < 18 && currentHour >= 6){
+              var daylight = true; 
+            }
+            else{
+              var daylight = false;
+            }
+            
+
+            function toggleLighting() {
+              daylight = !daylight;
+
+              if(daylight){
+                // Change background to white
+                gl.clearColor(0.0, 0.0, 0.0, 0.0);
+
+                // Change light intensity
+                gl.uniform1f(uSpecularStrengthPtr, 0.8);
+                gl.uniform1f(uAmbientStrengthPtr, 0.3);
+
+                document.querySelector("#lightingbtn").innerText = "NIGHT";
+              }
+              else{
+                 // Change background to dark gray
+                gl.clearColor(0.3, 0.3, 0.3, 1.0);
+
+                // Change light intensity
+                gl.uniform1f(uSpecularStrengthPtr, 0.5);
+                gl.uniform1f(uAmbientStrengthPtr, 0.05);
+
+                document.querySelector("#lightingbtn").innerText = "DAY";
+              }
+
+              // Update light after setting values
+              updateLightDirection();
+            };
+
+            window.toggleLighting = toggleLighting;
+            
+            
+
             /* Retrieves values of the input sliders */
             document.getElementById("eyeX").addEventListener("input", updateEyePosition);
             document.getElementById("eyeY").addEventListener("input", updateEyePosition);
@@ -700,11 +771,16 @@
             document.getElementById("lightR").addEventListener("input", updateLightColor);
             document.getElementById("lightG").addEventListener("input", updateLightColor);
             document.getElementById("lightB").addEventListener("input", updateLightColor);
-            
+
+
+            // document.getElementById("lightingbtn").addEventListener("click", toggleLighting);
 
             /* Event Listeners for input */
             document.addEventListener('keydown', updateEyeOnKeydown)
             document.addEventListener('wheel', updateEyeOnScroll, { passive: false });
+
+            
+              
         }
 
     
@@ -750,13 +826,13 @@
         <label style="margin-right: 20px; font-weight: bold;">LIGHT DIRECTION</label><br>
 
         <label for="lightX">X</label>
-        <input type="range" id="lightX" step="0.1" min="-20" max="20" value="-1.0" style="margin-right: 10px;"><br>
+        <input type="range" id="lightX" step="0.1" min="-20" max="20" value="1.0" style="margin-right: 10px;"><br>
 
         <label for="lightY">Y</label>
-        <input type="range" id="lightY" step="0.1" min="-20" max="20" value="-3.0" style="margin-right: 10px;"><br>
+        <input type="range" id="lightY" step="0.1" min="-20" max="20" value="3.0" style="margin-right: 10px;"><br>
 
         <label for="lightZ">Z</label>
-        <input type="range" id="lightZ" step="0.1" min="-20" max="20" value="-5.0" style="margin-right: 10px;"><br><br>
+        <input type="range" id="lightZ" step="0.1" min="-20" max="20" value="5.0" style="margin-right: 10px;"><br><br>
 
 
         <!-- Sliders for changing light color -->
@@ -770,6 +846,9 @@
 
         <label for="lightB" style="color: blue;">B</label>
         <input type="range" id="lightB" step="0.05" min="0" max="1" value="1" style="margin-right: 10px;"><br><br>
+
+        <label style="margin-right: 5px; font-weight: bold;">SET TIME TO: </label>
+        <button style="margin-right: 30px;"  id="lightingbtn" onclick="toggleLighting()">DAY</button>
 
       </div>
 
