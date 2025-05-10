@@ -9,6 +9,9 @@
       attribute vec4 aPosition;
       attribute vec4 aNormal;   
 
+      attribute vec2 aOffset;
+      uniform float uTime;
+
       uniform mat4 uModelMatrix;                
       uniform mat4 uViewMatrix;                 
       uniform mat4 uProjectionMatrix;           
@@ -35,7 +38,7 @@
       varying vec4 vDiffuseColor;
 
       void main() {
-        gl_Position = uProjectionMatrix * uViewMatrix * uModelMatrix * aPosition;
+        
   
         //Ambient
         vec4 ambient = uAmbientStrength * uLightColor;
@@ -60,6 +63,8 @@
         vAmbientColor = vec4(ambientColor.r, ambientColor.g, ambientColor.b, 1.0);
         vSpecularColor = vec4(specularColor.r, specularColor.g, specularColor.b, 1.0);
         vDiffuseColor = vec4(diffuseColor.r, diffuseColor.g, diffuseColor.b, 1.0);
+
+        gl_Position = uProjectionMatrix * uViewMatrix * uModelMatrix * aPosition;
       }
     </script>
 
@@ -450,7 +455,7 @@
 
 
             /* Variables for wave animation */
-            let startTime = Date.now(); 
+            let startTime = performance.now(); 
             let waveEnabled = false;
 
             /* Function for toggling rotation on button press */
@@ -527,11 +532,7 @@
 
             /* Function for rendering the objects on canvas*/
             function render() {
-                const now = Date.now();
-                const elapsedTime = (now - startTime) / 1000; 
-                mat4.identity(modelMatrix); 
-
-                
+                const elapsedTime = performance.now() / 1000;
 
                 /* Clears screen */
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -597,7 +598,7 @@
                         mat4.invert(tempNormalMatrix, tempModelMatrix);
                         mat4.transpose(tempNormalMatrix, tempNormalMatrix);
 
-                        gl.uniformMatrix4fv(uNormalMatrixPtr, false, new Float32Array(tempModelMatrix));
+                        gl.uniformMatrix4fv(uNormalMatrixPtr, false, new Float32Array(tempNormalMatrix));
 
 
                         /* Draws the cube */
