@@ -78,8 +78,6 @@
       }
 
     </script>
-
-    </script>
     <!-- Imports external javascript file -->
     <!-- Helper javascript methods for initializing webgl -->
     <script src="lib/webgl-init.js"></script>
@@ -301,10 +299,6 @@
             }
 
             updateLightColor()
-
-
-
-
 
             /* Function for changing the values of the light direction */
             function updateLightDirection() {
@@ -533,6 +527,8 @@
 
             /* Function for rendering the objects on canvas*/
             function render() {
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
                 const now = Date.now();
                 const elapsedTime = (now - startTime) / 1000; 
                 mat4.identity(modelMatrix); 
