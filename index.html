@@ -269,8 +269,6 @@
               updatePerspective()
             }
 
-
-
             /* Initializes model matrix (identity) */
             modelMatrix = mat4.create();
             gl.uniformMatrix4fv(uModelMatrixPointer, false, new Float32Array(modelMatrix));
@@ -671,6 +669,7 @@
             document.getElementById("lightG").addEventListener("input", updateLightColor);
             document.getElementById("lightB").addEventListener("input", updateLightColor);
 
+            document.getElementById("zoomAngle").addEventListener("input", updatePerspective);
 
             /* Event Listeners for input */
             document.addEventListener('keydown', updateEyeOnKeydown)
