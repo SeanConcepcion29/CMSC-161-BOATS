@@ -7,15 +7,11 @@
     <!-- VERTEX SHADER -->
     <script type="x-shader/x-vertex" id="vshader">
       attribute vec4 aPosition;
-      attribute vec4 aNormal;
-         
-      attribute vec2 aTexCoord;  // Add texture coordinate attribute
+      attribute vec4 aNormal;   
+
       attribute vec2 aInstancePosition;
       uniform float uTime;
-      // uniform vec3 uScale; 
-
-      uniform bool uUseWave;
-
+      uniform vec3 uScale;
 
       uniform mat4 uModelMatrix;                
       uniform mat4 uViewMatrix;                 
@@ -42,33 +38,23 @@
 
       varying vec4 vDiffuseColor;
 
-      varying vec2 vTexCoord;  // Pass texture coordinates to fragment shader
-
       void main() {
-
-        // Calculate wave height based on whether it is on or not.
-        float waveHeight = uUseWave ? sin(uTime * 2.0 + (aInstancePosition.x + aInstancePosition.y)) * 0.5 : 0.0;
+        // Calculate wave height
+        float waveHeight = sin(uTime * 2.0 + (aInstancePosition.x + aInstancePosition.y)) * 0.5;
 
         // Apply instance position and wave height
+        vec4 instancePosition = vec4(aInstancePosition.x, waveHeight, aInstancePosition.y, 1.0);
         mat4 modelMatrix = uModelMatrix;
-        modelMatrix[3].xyz += vec3(aInstancePosition.x, waveHeight, aInstancePosition.y);
-
-        // Create instance translation
-        mat4 instanceTranslate = mat4(
-          1.0, 0.0, 0.0, 0.0,
-          0.0, 1.0, 0.0, 0.0,
-          0.0, 0.0, 1.0, 0.0,
-          aInstancePosition.x, waveHeight, aInstancePosition.y, 1.0
-        );
+        modelMatrix[3] = instancePosition;
 
         // Apply scaling
-        /*mat4 scaleMatrix = mat4(
+        mat4 scaleMatrix = mat4(
           uScale.x, 0.0, 0.0, 0.0,
           0.0, uScale.y, 0.0, 0.0,
           0.0, 0.0, uScale.z, 0.0,
           0.0, 0.0, 0.0, 1.0
-        );*/
-        // modelMatrix = modelMatrix * scaleMatrix;
+        );
+        modelMatrix = modelMatrix * scaleMatrix;
 
         // Transform vertex position
         gl_Position = uProjectionMatrix * uViewMatrix * modelMatrix * aPosition;
@@ -108,19 +94,9 @@
       varying vec4 vDiffuseColor;
       varying vec4 vSpecularColor;
       varying vec4 vAmbientColor;
-      varying vec2 vTexCoord;
-  
-      uniform sampler2D uTexture;  // Texture sampler
-      uniform bool uUseTexture;    // Flag to enable/disable texture
 
       void main() {
-        if (uUseTexture) {
-          // Get texture color and combine with lighting
-          vec4 texColor = texture2D(uTexture, vTexCoord);
-          gl_FragColor = (vAmbientColor + vDiffuseColor + vSpecularColor) * texColor;
-        } else {
-          gl_FragColor = vAmbientColor + vDiffuseColor + vSpecularColor;
-        }
+        gl_FragColor = vAmbientColor + vDiffuseColor + vSpecularColor;
         
       }
 
@@ -148,6 +124,7 @@
         // Function to load the OBJ file
         function loadWakeboard(gl) {
             var objStr = '';
+            // For example, using fetch:
             fetch('models/wakeboard.obj')
                 .then(response => response.text())
                 .then(text => {
@@ -158,46 +135,10 @@
                 })
                 .catch(error => console.error('Error loading OBJ file:', error));
         }
-
-                    
-        var boatTexture = null;
-        var uUseTextureLocation = null;
-        var uTextureLocation = null;
-
-        // Load textures
-        function loadTexture(gl, url) {
-            const texture = gl.createTexture();
-            gl.bindTexture(gl.TEXTURE_2D, texture);
-            
-            // Fill texture with a temporary color while image loads
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, 
-                          new Uint8Array([255, 255, 255, 255]));
-            
-            const image = new Image();
-            image.onload = function() {
-                gl.bindTexture(gl.TEXTURE_2D, texture);
-                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-                
-                // Check if image is power of 2
-                if (isPowerOf2(image.width) && isPowerOf2(image.height)) {
-                    gl.generateMipmap(gl.TEXTURE_2D);
-                } else {
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-                }
-            };
-            image.src = url;
-            return texture;
-        }
-
-        function isPowerOf2(value) {
-            return (value & (value - 1)) === 0;
-        }
         
         /* MAIN PROGRAM */
         function main() {
-
+        
             var canvas = document.getElementById("main_canvas");
 
 
@@ -225,9 +166,6 @@
             var aNormalPointer = gl.getAttribLocation(program, "aNormal");
             gl.enableVertexAttribArray(aNormalPointer);
 
-            uUseTextureLocation = gl.getUniformLocation(program, 'uUseTexture');
-            uTextureLocation = gl.getUniformLocation(program, 'uTexture');
-
             /* Retrieves the location of the model, view, and projection from the shader program */
             var uModelMatrixPointer = gl.getUniformLocation(program, "uModelMatrix");
             var uViewMatrixPointer = gl.getUniformLocation(program, "uViewMatrix");
@@ -238,13 +176,8 @@
             const aInstancePosition = gl.getAttribLocation(program, 'aInstancePosition');
             gl.enableVertexAttribArray(aInstancePosition);
             
-            // const uScaleLocation = gl.getUniformLocation(program, "uScale");
-            // gl.uniform3f(uScaleLocation, 0.5, 0.5, 0.5);
-            
-            var waveModelMatrix = mat4.create();
-            mat4.scale(waveModelMatrix, waveModelMatrix, [0.5, 0.5, 0.5]); // Scale waves
-            gl.uniformMatrix4fv(uModelMatrixPointer, false, waveModelMatrix);
-
+            const uScaleLocation = gl.getUniformLocation(program, "uScale");
+            gl.uniform3f(uScaleLocation, 0.5, 0.5, 0.5);
 
             var modelMatrix = mat4.create();
             var viewMatrix;
@@ -270,7 +203,7 @@
             gl.uniformMatrix4fv(uProjectionMatrixPointer, false, new Float32Array(projectionMatrix));
 
             /* Number of Wave Cubes Instanced */
-            const instanceCount = 100;
+            const instanceCount = 32;
 
             /* Sets up view matrix specification */
 
@@ -278,7 +211,9 @@
             const gridCenterX = (instanceCount - 1) / 2; // Center of the grid along X
             const gridCenterZ = (instanceCount - 1) / 2; // Center of the grid along Z
             var lookAtPoint = [gridCenterX - 5, 0.0, gridCenterZ - 5]; // Adjust for grid offset
-            var upVector = [0.0, 1.0, 0.0, 0.0];
+            var upVector = [0.0, 1.0, 0.0, 0.0]; 
+
+
 
             /* Function for changing the values of the view position */
             function updateEyePosition() {
@@ -298,7 +233,7 @@
 
             updateEyePosition();
 
-             /* Function for updating eye postion based on key press */
+            /* Function for updating eye postion based on key press */
             function updateEyeOnKeydown(event){
 
                 /* Retrieves the eye position from the input fields */
@@ -555,11 +490,6 @@
             /* Function for toggling rotation on button press */
             function toggleAnimation() {
               waveEnabled = !waveEnabled;
-
-              // Update the shader uniform for wave
-              const uUseWaveLocation = gl.getUniformLocation(program, 'uUseWave');
-              gl.uniform1i(uUseWaveLocation, waveEnabled ? 1 : 0);
-
               if(waveEnabled) { document.querySelector("#animationbtn").innerText = "OFF"; }
               else if(!waveEnabled) { document.querySelector("#animationbtn").innerText = "ON"; }
             }
@@ -584,61 +514,49 @@
             }
 
            // Draw the boat
-           function renderBoat() {
-            if (!mesh) return;
+           function renderBoat(elapsedTime = 0) {
+                if (!mesh) return;
 
-            // Save current state
-            const prevArrayBuffer = gl.getParameter(gl.ARRAY_BUFFER_BINDING);
-            const prevElementBuffer = gl.getParameter(gl.ELEMENT_ARRAY_BUFFER_BINDING);
-            const prevPositionPointer = gl.getVertexAttrib(aPositionPointer, gl.VERTEX_ATTRIB_ARRAY_ENABLED);
-            const prevNormalPointer = gl.getVertexAttrib(aNormalPointer, gl.VERTEX_ATTRIB_ARRAY_ENABLED);
+                // Common boat transformations
+                let boatModelMatrix = mat4.create();
+                
+                if (waveEnabled) {
+                    // Wave-enabled boat
+                    let boatY = 1.23 + Math.sin(elapsedTime * 2.0) * 0.2;
+                    mat4.translate(boatModelMatrix, boatModelMatrix, [0, boatY + 0.5, 0]);
+                    let wavePhase = elapsedTime * 2.0;
+                    let rockAngle = Math.sin(wavePhase * 1.3) * 0.1;
+                    mat4.rotateZ(boatModelMatrix, boatModelMatrix, rockAngle);
+                } else {
+                   // Static boat with gentle bobbing
+                    let boatY = 1.5 + Math.sin(elapsedTime * 0.5) * 0.1; // Reduced amplitude and slower frequency
+                    mat4.translate(boatModelMatrix, boatModelMatrix, [0, boatY, 1]);
+                    let rockAngle = Math.sin(elapsedTime * 0.3) * 0.1; // Very slight rocking
+                    mat4.rotateZ(boatModelMatrix, boatModelMatrix, rockAngle);
+                }
 
-            // Boat transformations
-            let boatModelMatrix = mat4.create();
-            mat4.identity(boatModelMatrix);
-
-            // Translate
-            mat4.translate(boatModelMatrix,boatModelMatrix, [gridCenterX, 2.5, gridCenterZ]);
-            
-            // Rotate to orient the boat facing the camera.
-            mat4.rotateX(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90));
-            mat4.rotateZ(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90));
-            // Finally, scale
-            mat4.scale(boatModelMatrix, boatModelMatrix, [0.05, 0.05, 0.05]);
-            
-
-            gl.uniformMatrix4fv(uModelMatrixPointer, false, boatModelMatrix);
-            // Bind boat buffers
-            gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vertexBuffer);
-            gl.vertexAttribPointer(aPositionPointer, 3, gl.FLOAT, false, 0, 0);
-            gl.enableVertexAttribArray(aPositionPointer);
-            
-            gl.bindBuffer(gl.ARRAY_BUFFER, mesh.normalBuffer);
-            gl.vertexAttribPointer(aNormalPointer, 3, gl.FLOAT, false, 0, 0);
-            gl.enableVertexAttribArray(aNormalPointer);
-            
-            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer);
-            
-            gl.drawElements(gl.TRIANGLES, mesh.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
-
-            // Restore previous state
-            gl.bindBuffer(gl.ARRAY_BUFFER, prevArrayBuffer);
-            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, prevElementBuffer);
-            
-            
-            if (prevPositionPointer) {
-                gl.enableVertexAttribArray(aPositionPointer);
-            } else {
-                gl.disableVertexAttribArray(aPositionPointer);
+                // Common scaling and rotation
+                mat4.scale(boatModelMatrix, boatModelMatrix, [0.015, 0.015, 0.015]);
+                mat4.rotateX(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90));
+                
+                gl.uniformMatrix4fv(uModelMatrixPointer, false, boatModelMatrix);
+                
+                let boatNormalMatrix = mat4.create();
+                mat4.invert(boatNormalMatrix, boatModelMatrix);
+                mat4.transpose(boatNormalMatrix, boatNormalMatrix);
+                gl.uniformMatrix4fv(uNormalMatrixPtr, false, boatNormalMatrix);
+                
+                // Bind boat buffers
+                gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vertexBuffer);
+                gl.vertexAttribPointer(aPositionPointer, 3, gl.FLOAT, false, 0, 0);
+                
+                gl.bindBuffer(gl.ARRAY_BUFFER, mesh.normalBuffer);
+                gl.vertexAttribPointer(aNormalPointer, 3, gl.FLOAT, false, 0, 0);
+                
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer);
+                
+                gl.drawElements(gl.TRIANGLES, mesh.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
             }
-            
-            if (prevNormalPointer) {
-                gl.enableVertexAttribArray(aNormalPointer);
-            } else {
-                gl.disableVertexAttribArray(aNormalPointer);
-            }
-            
-        }
 
             /* Enable the ANGLE_instanced_arrays extension */
 
@@ -665,8 +583,8 @@
             gl.vertexAttribPointer(aInstancePosition, 2, gl.FLOAT, false, 0, 0);
             ext.vertexAttribDivisorANGLE(aInstancePosition, 1); // One instance per position
             
-            // //Scaling factor
-            // gl.uniform3f(uScaleLocation, 0.5, 0.5, 0.5);
+            //Scaling factor
+            gl.uniform3f(uScaleLocation, 0.5, 0.5, 0.5);
 
             /* Function for rendering the objects on canvas*/
             function render() {
@@ -680,9 +598,13 @@
                 /* Clears screen */
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-                // Reset model matrix to identity
-                var modelMatrix = mat4.create();
-                
+                /* Draw the boat */
+                const originalColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
+                const originalColor = [0.0, 0.850, 1.0, 1.0];
+                gl.uniform4f(originalColorPtr, 0.7, 0.7, 0.7, 1.0);
+                //renderBoat(elapsedTime); 
+                gl.uniform4fv(originalColorPtr, new Float32Array(originalColor));
+
 
                 /* Now draw the wave cubes */
                 gl.bindBuffer(gl.ARRAY_BUFFER, verticesBuffer);
@@ -692,19 +614,7 @@
                 gl.vertexAttribPointer(aNormalPointer, 4, gl.FLOAT, false, 0, 0);
                 
                 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-
-                // wave model matrix
-                var waveModelMatrix = mat4.create();
-                mat4.scale(waveModelMatrix, waveModelMatrix, [0.5, 0.5, 0.5]);
-                gl.uniformMatrix4fv(uModelMatrixPointer, false, waveModelMatrix);
-
                 ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, instanceCount * instanceCount);
-
-                const originalColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
-                const originalColor = [0.0, 0.850, 1.0, 1.0];
-                gl.uniform4f(originalColorPtr, 0.7, 0.7, 0.7, 1.0); // Boat color
-                renderBoat(/*elapsedTime*/);
-                gl.uniform4fv(originalColorPtr, new Float32Array(originalColor)); // Reset color
 
                 requestAnimationFrame(render);
             }
@@ -767,8 +677,8 @@
             document.getElementById("zoomAngle").addEventListener("input", updatePerspective);
 
             /* Event Listeners for input */
+            document.addEventListener('keydown', updateEyeOnKeydown)
             document.addEventListener('wheel', updateEyeOnScroll, { passive: false });
-            document.addEventListener('keydown', updateEyeOnKeydown);
 
             
               
@@ -793,19 +703,19 @@
           <label class="section-title">EYE POSITION</label>
 
           <label for="eyeX">X</label>
-          <input type="range" id="eyeX" step="0.1" min="0" max="50" value="25"><br/>
+          <input type="range" id="eyeX" step="0.1" min="-25" max="50" value="25"><br/>
   
           <label for="eyeY">Y</label>
           <input type="range" id="eyeY" step="0.1" min="-20" max="20" value="17"><br/>
   
           <label for="eyeZ">Z</label>
-          <input type="range" id="eyeZ" step="0.1" min="-20" max="100" value="100"><br/>
+          <input type="range" id="eyeZ" step="0.1" min="-20" max="20" value="-20"><br/>
         </div>
   
         <div class="section">
           <label class="section-title">ZOOM</label>
           <label for="zoomAngle">Z</label>
-          <input type="range" id="zoomAngle" step="0.1" min="-20" max="100" value="20">
+          <input type="range" id="zoomAngle" step="0.1" min="40" max="100" value="20">
         </div>
   
         <div class="section">
