@@ -7,11 +7,15 @@
     <!-- VERTEX SHADER -->
     <script type="x-shader/x-vertex" id="vshader">
       attribute vec4 aPosition;
-      attribute vec4 aNormal;   
+      attribute vec4 aNormal;
+         
 
       attribute vec2 aInstancePosition;
       uniform float uTime;
-      uniform vec3 uScale;
+      // uniform vec3 uScale; 
+
+      uniform bool uUseWave;
+
 
       uniform mat4 uModelMatrix;                
       uniform mat4 uViewMatrix;                 
@@ -39,22 +43,31 @@
       varying vec4 vDiffuseColor;
 
       void main() {
-        // Calculate wave height
-        float waveHeight = sin(uTime * 2.0 + (aInstancePosition.x + aInstancePosition.y)) * 0.5;
+
+        // Calculate wave height based on whether it is on or not.
+        float waveHeight = uUseWave ? sin(uTime * 2.0 + (aInstancePosition.x + aInstancePosition.y)) * 0.5 : 0.0;
 
         // Apply instance position and wave height
         vec4 instancePosition = vec4(aInstancePosition.x, waveHeight, aInstancePosition.y, 1.0);
         mat4 modelMatrix = uModelMatrix;
         modelMatrix[3] = instancePosition;
 
+        // Create instance translation
+        mat4 instanceTranslate = mat4(
+          1.0, 0.0, 0.0, 0.0,
+          0.0, 1.0, 0.0, 0.0,
+          0.0, 0.0, 1.0, 0.0,
+          aInstancePosition.x, waveHeight, aInstancePosition.y, 1.0
+        );
+
         // Apply scaling
-        mat4 scaleMatrix = mat4(
+        /*mat4 scaleMatrix = mat4(
           uScale.x, 0.0, 0.0, 0.0,
           0.0, uScale.y, 0.0, 0.0,
           0.0, 0.0, uScale.z, 0.0,
           0.0, 0.0, 0.0, 1.0
-        );
-        modelMatrix = modelMatrix * scaleMatrix;
+        );*/
+        // modelMatrix = modelMatrix * scaleMatrix;
 
         // Transform vertex position
         gl_Position = uProjectionMatrix * uViewMatrix * modelMatrix * aPosition;
@@ -118,13 +131,16 @@
     <!-- FUNCTIONS & MAIN PROGRAM -->
     <script>
 
+        // Global variables for boat position and movement
+        var boatPosition = { x: 0, y: 0, z: 0 };
+        var boatSpeed = 0.1;
+        var boatRotation = 0; // Rotation angle in radians
         // Global variable to hold the boat mesh.
         var mesh = null;
 
         // Function to load the OBJ file
         function loadWakeboard(gl) {
             var objStr = '';
-            // For example, using fetch:
             fetch('models/wakeboard.obj')
                 .then(response => response.text())
                 .then(text => {
@@ -149,7 +165,7 @@
             /* Sets up the WebGL rendering context */
             var gl = initializeWebGL(canvas, true);
 
-            loadWakeboard(gl);
+            loadWakeboard(gl); //initialize mesh
 
             /* Loads shaders */ 
             var vertexShader = initializeShader(gl, "vshader");
@@ -176,8 +192,13 @@
             const aInstancePosition = gl.getAttribLocation(program, 'aInstancePosition');
             gl.enableVertexAttribArray(aInstancePosition);
             
-            const uScaleLocation = gl.getUniformLocation(program, "uScale");
-            gl.uniform3f(uScaleLocation, 0.5, 0.5, 0.5);
+            // const uScaleLocation = gl.getUniformLocation(program, "uScale");
+            // gl.uniform3f(uScaleLocation, 0.5, 0.5, 0.5);
+            
+            var waveModelMatrix = mat4.create();
+            mat4.scale(waveModelMatrix, waveModelMatrix, [0.5, 0.5, 0.5]); // Scale waves
+            gl.uniformMatrix4fv(uModelMatrixPointer, false, waveModelMatrix);
+
 
             var modelMatrix = mat4.create();
             var viewMatrix;
@@ -196,14 +217,14 @@
             var fieldOfViewYAxis = glMatrix.toRadian(30);
             var aspectRatio = canvas.width / canvas.height;
             var nearPlane = 1;
-            var farPlane = 100;
+            var farPlane = 200;
 
             projectionMatrix = mat4.create();
             mat4.perspective(projectionMatrix, fieldOfViewYAxis, aspectRatio, nearPlane, farPlane);
             gl.uniformMatrix4fv(uProjectionMatrixPointer, false, new Float32Array(projectionMatrix));
 
             /* Number of Wave Cubes Instanced */
-            const instanceCount = 32;
+            const instanceCount = 80;
 
             /* Sets up view matrix specification */
 
@@ -490,6 +511,11 @@
             /* Function for toggling rotation on button press */
             function toggleAnimation() {
               waveEnabled = !waveEnabled;
+
+              // Update the shader uniform for wave
+              const uUseWaveLocation = gl.getUniformLocation(program, 'uUseWave');
+              gl.uniform1i(uUseWaveLocation, waveEnabled ? 1 : 0);
+
               if(waveEnabled) { document.querySelector("#animationbtn").innerText = "OFF"; }
               else if(!waveEnabled) { document.querySelector("#animationbtn").innerText = "ON"; }
             }
@@ -514,49 +540,110 @@
             }
 
            // Draw the boat
-           function renderBoat(elapsedTime = 0) {
-                if (!mesh) return;
+           function renderBoat() {
+              if (!mesh) return;
 
-                // Common boat transformations
-                let boatModelMatrix = mat4.create();
-                
-                if (waveEnabled) {
-                    // Wave-enabled boat
-                    let boatY = 1.23 + Math.sin(elapsedTime * 2.0) * 0.2;
-                    mat4.translate(boatModelMatrix, boatModelMatrix, [0, boatY + 0.5, 0]);
-                    let wavePhase = elapsedTime * 2.0;
-                    let rockAngle = Math.sin(wavePhase * 1.3) * 0.1;
-                    mat4.rotateZ(boatModelMatrix, boatModelMatrix, rockAngle);
-                } else {
-                   // Static boat with gentle bobbing
-                    let boatY = 1.5 + Math.sin(elapsedTime * 0.5) * 0.1; // Reduced amplitude and slower frequency
-                    mat4.translate(boatModelMatrix, boatModelMatrix, [0, boatY, 1]);
-                    let rockAngle = Math.sin(elapsedTime * 0.3) * 0.1; // Very slight rocking
-                    mat4.rotateZ(boatModelMatrix, boatModelMatrix, rockAngle);
-                }
+              // Save current state
+              const prevArrayBuffer = gl.getParameter(gl.ARRAY_BUFFER_BINDING);
+              const prevElementBuffer = gl.getParameter(gl.ELEMENT_ARRAY_BUFFER_BINDING);
+              const prevPositionPointer = gl.getVertexAttrib(aPositionPointer, gl.VERTEX_ATTRIB_ARRAY_ENABLED);
+              const prevNormalPointer = gl.getVertexAttrib(aNormalPointer, gl.VERTEX_ATTRIB_ARRAY_ENABLED);
 
-                // Common scaling and rotation
-                mat4.scale(boatModelMatrix, boatModelMatrix, [0.015, 0.015, 0.015]);
-                mat4.rotateX(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90));
-                
-                gl.uniformMatrix4fv(uModelMatrixPointer, false, boatModelMatrix);
-                
-                let boatNormalMatrix = mat4.create();
-                mat4.invert(boatNormalMatrix, boatModelMatrix);
-                mat4.transpose(boatNormalMatrix, boatNormalMatrix);
-                gl.uniformMatrix4fv(uNormalMatrixPtr, false, boatNormalMatrix);
-                
-                // Bind boat buffers
-                gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vertexBuffer);
-                gl.vertexAttribPointer(aPositionPointer, 3, gl.FLOAT, false, 0, 0);
-                
-                gl.bindBuffer(gl.ARRAY_BUFFER, mesh.normalBuffer);
-                gl.vertexAttribPointer(aNormalPointer, 3, gl.FLOAT, false, 0, 0);
-                
-                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer);
-                
-                gl.drawElements(gl.TRIANGLES, mesh.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+              // Boat transformations
+              let boatModelMatrix = mat4.create();
+              
+              // Position the boat relative to wave grid center
+              const gridOffsetX = (instanceCount - 1) / 2 - 5;
+              const gridOffsetZ = (instanceCount - 1) / 2 - 5;
+              
+              // Calculate wave height at boat position for realistic floating
+              const elapsedTime = performance.now() / 1000;
+              const waveHeight = waveEnabled ? 
+                  getWaveHeight(boatPosition.x + gridOffsetX, boatPosition.z + gridOffsetZ, elapsedTime) * 0.5 : 0;
+              
+              // Translate to position (including wave height)
+              mat4.translate(boatModelMatrix, boatModelMatrix, [
+                  boatPosition.x + gridOffsetX, 
+                  0,
+                  boatPosition.z + gridOffsetZ
+              ]);
+              
+              // Rotate based on movement direction
+              mat4.rotateY(boatModelMatrix, boatModelMatrix, boatRotation);
+              
+              // Initial orientation adjustments
+              mat4.rotateX(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90)); // Tilt forward
+              mat4.rotateZ(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90)); // Face along Z
+              
+              // Scale the boat down
+              mat4.scale(boatModelMatrix, boatModelMatrix, [0.05, 0.05, 0.05]);
+
+              // Update normal matrix for lighting
+              var normalMatrix = mat4.create();
+              mat4.invert(normalMatrix, boatModelMatrix);
+              mat4.transpose(normalMatrix, normalMatrix);
+              gl.uniformMatrix4fv(uNormalMatrixPtr, false, normalMatrix);
+              
+              // Set the model matrix for the boat only
+              gl.uniformMatrix4fv(uModelMatrixPointer, false, boatModelMatrix);
+
+              // Bind boat buffers
+              gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vertexBuffer);
+              gl.vertexAttribPointer(aPositionPointer, 3, gl.FLOAT, false, 0, 0);
+              gl.enableVertexAttribArray(aPositionPointer);
+              
+              gl.bindBuffer(gl.ARRAY_BUFFER, mesh.normalBuffer);
+              gl.vertexAttribPointer(aNormalPointer, 3, gl.FLOAT, false, 0, 0);
+              gl.enableVertexAttribArray(aNormalPointer);
+              
+              gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer);
+              gl.drawElements(gl.TRIANGLES, mesh.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+
+              // Restore previous state
+              gl.bindBuffer(gl.ARRAY_BUFFER, prevArrayBuffer);
+              gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, prevElementBuffer);
+              
+              if (prevPositionPointer) {
+                  gl.enableVertexAttribArray(aPositionPointer);
+              } else {
+                  gl.disableVertexAttribArray(aPositionPointer);
+              }
+              
+              if (prevNormalPointer) {
+                  gl.enableVertexAttribArray(aNormalPointer);
+              } else {
+                  gl.disableVertexAttribArray(aNormalPointer);
+              }
+          }
+
+          function handleBoatMovement(event) {
+            // Don't interfere with camera controls
+            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+                event.preventDefault();
             }
+
+            switch (event.key) {
+                case 'ArrowUp': // Move forward
+                    boatPosition.x -= Math.sin(boatRotation) * boatSpeed;
+                    boatPosition.z -= Math.cos(boatRotation) * boatSpeed;
+                    break;
+                case 'ArrowDown': // Move backward
+                    boatPosition.x += Math.sin(boatRotation) * boatSpeed;
+                    boatPosition.z += Math.cos(boatRotation) * boatSpeed;
+                    break;
+                case 'ArrowLeft': // Turn left
+                    boatRotation += 0.05;
+                    break;
+                case 'ArrowRight': // Turn right
+                    boatRotation -= 0.05;
+                    break;
+            }
+
+            // Optional: Add boundaries to keep boat within water area
+            const boundary = instanceCount / 2;
+            boatPosition.x = Math.max(-boundary, Math.min(boundary, boatPosition.x));
+            boatPosition.z = Math.max(-boundary, Math.min(boundary, boatPosition.z));
+        }
 
             /* Enable the ANGLE_instanced_arrays extension */
 
@@ -583,8 +670,8 @@
             gl.vertexAttribPointer(aInstancePosition, 2, gl.FLOAT, false, 0, 0);
             ext.vertexAttribDivisorANGLE(aInstancePosition, 1); // One instance per position
             
-            //Scaling factor
-            gl.uniform3f(uScaleLocation, 0.5, 0.5, 0.5);
+            // //Scaling factor
+            // gl.uniform3f(uScaleLocation, 0.5, 0.5, 0.5);
 
             /* Function for rendering the objects on canvas*/
             function render() {
@@ -598,13 +685,9 @@
                 /* Clears screen */
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-                /* Draw the boat */
-                const originalColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
-                const originalColor = [0.0, 0.850, 1.0, 1.0];
-                gl.uniform4f(originalColorPtr, 0.7, 0.7, 0.7, 1.0);
-                //renderBoat(elapsedTime); 
-                gl.uniform4fv(originalColorPtr, new Float32Array(originalColor));
-
+                // Reset model matrix to identity
+                var modelMatrix = mat4.create();
+                
 
                 /* Now draw the wave cubes */
                 gl.bindBuffer(gl.ARRAY_BUFFER, verticesBuffer);
@@ -614,7 +697,19 @@
                 gl.vertexAttribPointer(aNormalPointer, 4, gl.FLOAT, false, 0, 0);
                 
                 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+
+                // wave model matrix
+                var waveModelMatrix = mat4.create();
+                mat4.scale(waveModelMatrix, waveModelMatrix, [0.5, 0.5, 0.5]);
+                gl.uniformMatrix4fv(uModelMatrixPointer, false, waveModelMatrix);
+
                 ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, instanceCount * instanceCount);
+
+                const originalColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
+                const originalColor = [0.0, 0.850, 1.0, 1.0];
+                gl.uniform4f(originalColorPtr, 0.7, 0.7, 0.7, 1.0); // Boat color
+                renderBoat(/*elapsedTime*/);
+                gl.uniform4fv(originalColorPtr, new Float32Array(originalColor)); // Reset color
 
                 requestAnimationFrame(render);
             }
@@ -680,6 +775,12 @@
             document.addEventListener('keydown', updateEyeOnKeydown)
             document.addEventListener('wheel', updateEyeOnScroll, { passive: false });
 
+            // Add boat movement controls
+            document.addEventListener('keydown', handleBoatMovement);
+
+            // Modify existing camera controls to require Shift key
+            document.addEventListener('keydown', updateEyeOnKeydown);
+
             
               
         }
@@ -703,19 +804,19 @@
           <label class="section-title">EYE POSITION</label>
 
           <label for="eyeX">X</label>
-          <input type="range" id="eyeX" step="0.1" min="-25" max="50" value="25"><br/>
+          <input type="range" id="eyeX" step="0.1" min="0" max="50" value="25"><br/>
   
           <label for="eyeY">Y</label>
           <input type="range" id="eyeY" step="0.1" min="-20" max="20" value="17"><br/>
   
           <label for="eyeZ">Z</label>
-          <input type="range" id="eyeZ" step="0.1" min="-20" max="20" value="-20"><br/>
+          <input type="range" id="eyeZ" step="0.1" min="-20" max="100" value="100"><br/>
         </div>
   
         <div class="section">
           <label class="section-title">ZOOM</label>
           <label for="zoomAngle">Z</label>
-          <input type="range" id="zoomAngle" step="0.1" min="40" max="100" value="20">
+          <input type="range" id="zoomAngle" step="0.1" min="-20" max="100" value="20">
         </div>
   
         <div class="section">
