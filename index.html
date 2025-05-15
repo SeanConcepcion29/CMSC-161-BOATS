@@ -43,6 +43,7 @@
       varying vec4 vDiffuseColor;
 
       varying vec2 vTexCoord;  // Pass texture coordinates to fragment shader
+      
 
       void main() {
 
@@ -96,6 +97,7 @@
         vAmbientColor = vec4(ambientColor.r, ambientColor.g, ambientColor.b, 1.0);
         vSpecularColor = vec4(specularColor.r, specularColor.g, specularColor.b, 1.0);
         vDiffuseColor = vec4(diffuseColor.r, diffuseColor.g, diffuseColor.b, 1.0);
+        vTexCoord = aTexCoord;  // Pass texture coordinates to fragment shader
 
       }
     </script>
@@ -142,29 +144,42 @@
     <!-- FUNCTIONS & MAIN PROGRAM -->
     <script>
 
-        // Global variable to hold the boat mesh.
+        // Global variable to hold the boat mesh and boat vertices for texture mapping.
         var mesh = null;
+        var boatVertices = null;
+        var parsedObj = null;
 
         // Function to load the OBJ file
         function loadWakeboard(gl) {
-            var objStr = '';
             fetch('models/wakeboard.obj')
                 .then(response => response.text())
                 .then(text => {
-                    // Parse the OBJ file
-                    var parsedObj = new OBJ.Mesh(text);
+                    parsedObj = new OBJ.Mesh(text);
+                    boatVertices = parsedObj.vertices;
+                    
                     // Initialize WebGL buffers
                     mesh = OBJ.initMeshBuffers(gl, parsedObj);
+
+                    // Check if texture coordinates exist
+                    if (parsedObj.textures && parsedObj.textures.length > 0) {
+                        mesh.textureBuffer = gl.createBuffer();
+                        gl.bindBuffer(gl.ARRAY_BUFFER, mesh.textureBuffer);
+                        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(parsedObj.textures), gl.STATIC_DRAW);
+                        mesh.hasTextureCoords = true; // Add this flag
+                    } else {
+                        mesh.hasTextureCoords = false; // Add this flag
+                        console.warn("OBJ file has no texture coordinates");
+                    }
                 })
                 .catch(error => console.error('Error loading OBJ file:', error));
         }
-
-                    
+                            
         var boatTexture = null;
         var uUseTextureLocation = null;
         var uTextureLocation = null;
 
-        // Load textures
+
+        // Load texture image file
         function loadTexture(gl, url) {
             const texture = gl.createTexture();
             gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -210,6 +225,11 @@
 
             loadWakeboard(gl);
 
+           // const wakeboardTexture = loadTexture(gl, 'textures/white-wooden-texture-flooring-background.jpg');
+           const wakeboardTexture = loadTexture(gl, 'textures/white-wooden-texture-flooring-background.jpg');
+
+            
+
             /* Loads shaders */ 
             var vertexShader = initializeShader(gl, "vshader");
             var fragmentShader = initializeShader(gl, "fshader");
@@ -220,6 +240,8 @@
 
             /* Creates and links program */
             var aPositionPointer = gl.getAttribLocation(program, "aPosition");
+            var texcoordLocation = gl.getAttribLocation(program, "aTexCoord");
+            
             gl.enableVertexAttribArray(aPositionPointer);
 
             var aNormalPointer = gl.getAttribLocation(program, "aNormal");
@@ -587,11 +609,24 @@
            function renderBoat() {
             if (!mesh) return;
 
+            // Enable texture only if we have texture coordinates
+            const useTexture = mesh.hasTextureCoords && wakeboardTexture;
+            gl.uniform1i(uUseTextureLocation, useTexture ? 1 : 0);
+            
+            if (useTexture) {
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, wakeboardTexture);
+                gl.uniform1i(uTextureLocation, 0);
+            }
+
             // Save current state
             const prevArrayBuffer = gl.getParameter(gl.ARRAY_BUFFER_BINDING);
             const prevElementBuffer = gl.getParameter(gl.ELEMENT_ARRAY_BUFFER_BINDING);
             const prevPositionPointer = gl.getVertexAttrib(aPositionPointer, gl.VERTEX_ATTRIB_ARRAY_ENABLED);
             const prevNormalPointer = gl.getVertexAttrib(aNormalPointer, gl.VERTEX_ATTRIB_ARRAY_ENABLED);
+            const prevTexCoordPointer = texcoordLocation !== -1 ? 
+            gl.getVertexAttrib(texcoordLocation, gl.VERTEX_ATTRIB_ARRAY_ENABLED) : false;
+
 
             // Boat transformations
             let boatModelMatrix = mat4.create();
@@ -616,6 +651,19 @@
             gl.bindBuffer(gl.ARRAY_BUFFER, mesh.normalBuffer);
             gl.vertexAttribPointer(aNormalPointer, 3, gl.FLOAT, false, 0, 0);
             gl.enableVertexAttribArray(aNormalPointer);
+
+            // Bind texture coordinates if they exist
+                if (mesh.hasTextureCoords && mesh.textureBuffer && texcoordLocation !== -1) {
+                    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.textureBuffer);
+                    gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
+                    gl.enableVertexAttribArray(texcoordLocation);
+                } else if (texcoordLocation !== -1) {
+                    gl.disableVertexAttribArray(texcoordLocation);
+                    console.log("they do not exist")
+                    // Provide default texture coordinates if needed
+                    gl.vertexAttrib2f(texcoordLocation, 0, 0);
+                }
+
             
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer);
             
@@ -637,7 +685,17 @@
             } else {
                 gl.disableVertexAttribArray(aNormalPointer);
             }
-            
+
+            if (texcoordLocation !== -1) {
+                if (prevTexCoordPointer) {
+                    gl.enableVertexAttribArray(texcoordLocation);
+                } else {
+                    gl.disableVertexAttribArray(texcoordLocation);
+                }
+            }
+            // console.log('Texture coordinates:', parsedObj.textures);
+            // console.log('Texture buffer created:', !!mesh.textureBuffer);
+            // console.log('Texture location:', texcoordLocation);
         }
 
             /* Enable the ANGLE_instanced_arrays extension */
@@ -702,6 +760,13 @@
 
                 const originalColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
                 const originalColor = [0.0, 0.850, 1.0, 1.0];
+
+                // Bind the texture
+                gl.activeTexture(gl.TEXTURE0);                     // Activate texture unit 0
+                gl.bindTexture(gl.TEXTURE_2D, wakeboardTexture);   // Bind your texture
+                gl.uniform1i(uTextureLocation, 0);                 // Set sampler to texture unit 0
+                gl.uniform1i(uUseTextureLocation, true);           // Tell shader to use the texture
+
                 gl.uniform4f(originalColorPtr, 0.7, 0.7, 0.7, 1.0); // Boat color
                 renderBoat(/*elapsedTime*/);
                 gl.uniform4fv(originalColorPtr, new Float32Array(originalColor)); // Reset color
@@ -854,3 +919,4 @@
 <!-- 1 | Wave Animation -->
 <!-- https://stackoverflow.com/questions/23417139/programmatically-make-a-wave-using-javascript -->
 <!-- https://gist.github.com/gkhays/e264009c0832c73d5345847e673a64ab -->
+ <!--https://webglfundamentals.org/webgl/lessons/webgl-3d-textures.html-->
