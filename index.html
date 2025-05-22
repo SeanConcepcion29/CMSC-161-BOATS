@@ -132,22 +132,14 @@
       void main() {
 
         //change color based on height
-        //float t = vWaveHeight + 0.6;
-        //vec3 lowColor = vec3(0.0, 0.5, 1.0);
-        //vec3 highColor = vec3(1.0, 1.0, 1.0);
-        //vec3 dynamicDiffuse = mix(lowColor, highColor, t);
-
-        //vec4 coloredDiffuse = vec4(dynamicDiffuse, 1.0) * vDiffuseColor.a;
-
-
-        float t = clamp(vWaveHeight + 0.5, 0.0, 1.0); // Clamp for safety
-        t = pow(t, 2.0); // Sharper white at the top, optional
-        vec3 lowColor = vec3(0.0, 0.5, 1.0);
-        vec3 highColor = vec3(1.0, 1.0, 1.0);
+        float t = clamp(vWaveHeight + 0.5, 0.0, 1.0);
+        t = pow(t, 2.0); // for sharper white at the top
+        vec3 lowColor = vec3(0.0, 0.2, 0.7);
+        vec3 highColor = vec3(0.6, 0.75, 1.0);
         vec3 dynamicDiffuse = mix(lowColor, highColor, t);
 
         // Use the lighting intensity from vDiffuseColor, but replace the color
-        float diffuseIntensity = length(vDiffuseColor.rgb); // Or use vDiffuseColor.r if it's grayscale
+        float diffuseIntensity = length(vDiffuseColor.rgb); 
         vec4 coloredDiffuse = vec4(dynamicDiffuse * diffuseIntensity, 1.0);
 
         if (uUseTexture) {
@@ -973,7 +965,7 @@ function render() {
         <div class="section">
           <label class="section-title">ZOOM</label>
           <label for="zoomAngle">Z</label>
-          <input type="range" id="zoomAngle" step="0.1" min="-20" max="100" value="30">
+          <input type="range" id="zoomAngle" step="0.1" min="1" max="100" value="30">
         </div>
   
         <div class="section">
