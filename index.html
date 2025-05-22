@@ -38,9 +38,14 @@
 
       varying vec4 vDiffuseColor;
 
+      //for varying color based on height
+      uniform int isCube;
+      varying float vWaveHeight;
+
       void main() {
         // Calculate wave height
         float waveHeight = sin(uTime * 2.0 + (aInstancePosition.x + aInstancePosition.y)) * 0.5;
+        vWaveHeight = waveHeight;
 
         // Apply instance position and wave height
         vec4 instancePosition = vec4(aInstancePosition.x, waveHeight, aInstancePosition.y, 1.0);
@@ -95,8 +100,27 @@
       varying vec4 vSpecularColor;
       varying vec4 vAmbientColor;
 
+      uniform int isCube;
+      uniform int 
+      varying float vWaveHeight;
+
+      
+
       void main() {
-        gl_FragColor = vAmbientColor + vDiffuseColor + vSpecularColor;
+        float t = vWaveHeight + 0.5;
+        
+        //t = pow(t, 2.0);
+
+        vec3 lowColor = vec3(0.0, 0.5, 1.0);
+        vec3 highColor = vec3(1.0, 1.0, 1.0);
+        vec3 dynamicDiffuse = mix(lowColor, highColor, t);
+        
+
+        if (isCube == 1){
+          gl_FragColor = vAmbientColor + vec4(dynamicDiffuse, 1.0) * vDiffuseColor + vSpecularColor;
+        }else{
+          gl_FragColor = vAmbientColor + vDiffuseColor + vSpecularColor;
+        }
         
       }
 
@@ -607,6 +631,10 @@
 
 
                 /* Now draw the wave cubes */
+                //tell vertex shader that cubes are being drawn
+                const uIsCubeLocation = gl.getUniformLocation(program, 'isCube')
+                gl.uniform1i(uIsCubeLocation, 1);
+
                 gl.bindBuffer(gl.ARRAY_BUFFER, verticesBuffer);
                 gl.vertexAttribPointer(aPositionPointer, 4, gl.FLOAT, false, 0, 0);
                 
@@ -615,6 +643,8 @@
                 
                 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
                 ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, instanceCount * instanceCount);
+
+                gl.uniform1i(uIsCubeLocation, 0);
 
                 requestAnimationFrame(render);
             }
