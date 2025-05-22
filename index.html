@@ -43,6 +43,8 @@
       varying vec4 vDiffuseColor;
 
       varying vec2 vTexCoord;  // Pass texture coordinates to fragment shader
+
+      varying float vWaveHeight;
       
 
       void main() {
@@ -51,16 +53,13 @@
         float wave1 = sin(uTime * 2.0 + aInstancePosition.x * 0.7 + aInstancePosition.y * 0.4);
         float wave2 = sin(uTime * 3.0 + aInstancePosition.x * 1.3 - aInstancePosition.y * 0.9);
         float wave3 = sin(uTime * 1.5 + aInstancePosition.x * 0.2 + aInstancePosition.y * 1.7);
-        float waveHeight = uUseWave ? (wave1 * 0.3 + wave2 * 0.2 + wave3 * 0.1) : 0.0;
-
-
-      
-
-
-
-
-
-
+        float waveHeight;
+        if (uUseWave) {
+            waveHeight = wave1 * 0.3 + wave2 * 0.2 + wave3 * 0.1;
+        } else {
+            waveHeight = 0.0;
+        }
+        vWaveHeight = waveHeight;
 
 
         // Apply instance position and wave height
@@ -124,17 +123,44 @@
       varying vec4 vSpecularColor;
       varying vec4 vAmbientColor;
       varying vec2 vTexCoord;
-  
+      varying float vWaveHeight;
+      
+      uniform bool uUseWave;
       uniform sampler2D uTexture;  // Texture sampler
       uniform bool uUseTexture;    // Flag to enable/disable texture
 
       void main() {
+
+        //change color based on height
+        //float t = vWaveHeight + 0.6;
+        //vec3 lowColor = vec3(0.0, 0.5, 1.0);
+        //vec3 highColor = vec3(1.0, 1.0, 1.0);
+        //vec3 dynamicDiffuse = mix(lowColor, highColor, t);
+
+        //vec4 coloredDiffuse = vec4(dynamicDiffuse, 1.0) * vDiffuseColor.a;
+
+
+        float t = clamp(vWaveHeight + 0.5, 0.0, 1.0); // Clamp for safety
+        t = pow(t, 2.0); // Sharper white at the top, optional
+        vec3 lowColor = vec3(0.0, 0.5, 1.0);
+        vec3 highColor = vec3(1.0, 1.0, 1.0);
+        vec3 dynamicDiffuse = mix(lowColor, highColor, t);
+
+        // Use the lighting intensity from vDiffuseColor, but replace the color
+        float diffuseIntensity = length(vDiffuseColor.rgb); // Or use vDiffuseColor.r if it's grayscale
+        vec4 coloredDiffuse = vec4(dynamicDiffuse * diffuseIntensity, 1.0);
+
         if (uUseTexture) {
           // Get texture color and combine with lighting
           vec4 texColor = texture2D(uTexture, vTexCoord);
           gl_FragColor = (vAmbientColor + vDiffuseColor + vSpecularColor) * texColor;
         } else {
-          gl_FragColor = vAmbientColor + vDiffuseColor + vSpecularColor;
+          if (uUseWave){
+            gl_FragColor = vAmbientColor + coloredDiffuse + vSpecularColor;
+          }else{
+            gl_FragColor = vAmbientColor + vDiffuseColor + vSpecularColor;
+          }
+          
         }
         
       }
@@ -298,7 +324,7 @@
             var fieldOfViewYAxis = glMatrix.toRadian(30);
             var aspectRatio = canvas.width / canvas.height;
             var nearPlane = 1;
-            var farPlane = 100;
+            var farPlane = 200;
 
             projectionMatrix = mat4.create();
             mat4.perspective(projectionMatrix, fieldOfViewYAxis, aspectRatio, nearPlane, farPlane);
@@ -843,7 +869,7 @@ function render() {
     gl.uniform4f(originalColorPtr, 0.7, 0.7, 0.7, 1.0); // Boat color
     renderBoat();
     gl.uniform4fv(originalColorPtr, new Float32Array(originalColor)); // Reset color
-
+    gl.uniform1i(uUseTextureLocation, false);
     // Loop
     requestAnimationFrame(render);
 }
