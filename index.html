@@ -48,7 +48,20 @@
       void main() {
 
         // Calculate wave height based on whether it is on or not.
-        float waveHeight = uUseWave ? sin(uTime * 2.0 + (aInstancePosition.x + aInstancePosition.y)) * 0.5 : 0.0;
+        float wave1 = sin(uTime * 2.0 + aInstancePosition.x * 0.7 + aInstancePosition.y * 0.4);
+        float wave2 = sin(uTime * 3.0 + aInstancePosition.x * 1.3 - aInstancePosition.y * 0.9);
+        float wave3 = sin(uTime * 1.5 + aInstancePosition.x * 0.2 + aInstancePosition.y * 1.7);
+        float waveHeight = uUseWave ? (wave1 * 0.3 + wave2 * 0.2 + wave3 * 0.1) : 0.0;
+
+
+      
+
+
+
+
+
+
+
 
         // Apply instance position and wave height
         mat4 modelMatrix = uModelMatrix;
@@ -292,7 +305,7 @@
             gl.uniformMatrix4fv(uProjectionMatrixPointer, false, new Float32Array(projectionMatrix));
 
             /* Number of Wave Cubes Instanced */
-            const instanceCount = 100;
+            const instanceCount = 80;
 
             /* Sets up view matrix specification */
 
@@ -473,7 +486,7 @@
 
             /* Sets up coordinates for the object */
             var vertices = [  
-    
+  
                 /* Front face */
                 -1.0, -1.0,  1.0, 1.0,
                 1.0, -1.0,  1.0, 1.0,
@@ -721,58 +734,90 @@
 
             gl.bindBuffer(gl.ARRAY_BUFFER, instanceBuffer);
             gl.vertexAttribPointer(aInstancePosition, 2, gl.FLOAT, false, 0, 0);
-            ext.vertexAttribDivisorANGLE(aInstancePosition, 1); // One instance per position
+            ext.vertexAttribDivisorANGLE(aInstancePosition, 1);
             
             // //Scaling factor
             // gl.uniform3f(uScaleLocation, 0.5, 0.5, 0.5);
 
-            /* Function for rendering the objects on canvas*/
-            function render() {
-                
-                const elapsedTime = performance.now() / 1000;
 
-                /* Update the time uniform */
-                const uTimeLocation = gl.getUniformLocation(program, 'uTime');
-                gl.uniform1f(uTimeLocation, elapsedTime);
+                          // Draw a cube at the corner of the wave grid
+              const cornerColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
+              gl.uniform4f(cornerColorPtr, 1.0, 0.0, 0.0, 1.0); // Red cube
 
-                /* Clears screen */
-                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+              // Setup model matrix for the corner cube
+              let cornerModelMatrix = mat4.create();
+              const offsetX = -5;
+              const offsetY = -5;
+              mat4.translate(cornerModelMatrix, cornerModelMatrix, [offsetX, offsetY, 0]);
+              mat4.scale(cornerModelMatrix, cornerModelMatrix, [0.5, 0.5, 0.5]); // Same scale as wave cubes
 
-                // Reset model matrix to identity
-                var modelMatrix = mat4.create();
-                
+              // Pass to shader
+              gl.uniformMatrix4fv(uModelMatrixPointer, false, cornerModelMatrix);
 
-                /* Now draw the wave cubes */
-                gl.bindBuffer(gl.ARRAY_BUFFER, verticesBuffer);
-                gl.vertexAttribPointer(aPositionPointer, 4, gl.FLOAT, false, 0, 0);
-                
-                gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-                gl.vertexAttribPointer(aNormalPointer, 4, gl.FLOAT, false, 0, 0);
-                
-                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+              // Use same cube geometry buffers
+              gl.bindBuffer(gl.ARRAY_BUFFER, verticesBuffer);
+              gl.vertexAttribPointer(aPositionPointer, 4, gl.FLOAT, false, 0, 0);
 
-                // wave model matrix
-                var waveModelMatrix = mat4.create();
-                mat4.scale(waveModelMatrix, waveModelMatrix, [0.5, 0.5, 0.5]);
-                gl.uniformMatrix4fv(uModelMatrixPointer, false, waveModelMatrix);
+              gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+              gl.vertexAttribPointer(aNormalPointer, 4, gl.FLOAT, false, 0, 0);
 
-                ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, instanceCount * instanceCount);
+              gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
 
-                const originalColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
-                const originalColor = [0.0, 0.850, 1.0, 1.0];
+              // Disable instancing for this one cube
+              ext.vertexAttribDivisorANGLE(aInstancePosition, 0);
 
-                // Bind the texture
-                gl.activeTexture(gl.TEXTURE0);                     // Activate texture unit 0
-                gl.bindTexture(gl.TEXTURE_2D, wakeboardTexture);   // Bind your texture
-                gl.uniform1i(uTextureLocation, 0);                 // Set sampler to texture unit 0
-                gl.uniform1i(uUseTextureLocation, true);           // Tell shader to use the texture
+              // Draw the cube (just once)
+              gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0);
 
-                gl.uniform4f(originalColorPtr, 0.7, 0.7, 0.7, 1.0); // Boat color
-                renderBoat(/*elapsedTime*/);
-                gl.uniform4fv(originalColorPtr, new Float32Array(originalColor)); // Reset color
+              // Restore instancing divisor
+              ext.vertexAttribDivisorANGLE(aInstancePosition, 1);
 
-                requestAnimationFrame(render);
-            }
+
+
+function render() {
+    const elapsedTime = performance.now() / 2000;
+
+
+    // Update time uniform
+    const uTimeLocation = gl.getUniformLocation(program, 'uTime');
+    gl.uniform1f(uTimeLocation, elapsedTime);
+
+    // Clear screen
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    // === Wave cubes ===
+    var waveModelMatrix = mat4.create();
+    mat4.scale(waveModelMatrix, waveModelMatrix, [0.5, 0.5, 0.5]);
+    gl.uniformMatrix4fv(uModelMatrixPointer, false, waveModelMatrix);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, verticesBuffer);
+    gl.vertexAttribPointer(aPositionPointer, 4, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+    gl.vertexAttribPointer(aNormalPointer, 4, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, instanceCount * instanceCount);
+
+    // === Boat ===
+    const originalColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
+    const originalColor = [0.0, 0.850, 1.0, 1.0];
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, wakeboardTexture);
+    gl.uniform1i(uTextureLocation, 0);
+    gl.uniform1i(uUseTextureLocation, true);
+
+    gl.uniform4f(originalColorPtr, 0.7, 0.7, 0.7, 1.0); // Boat color
+    renderBoat();
+    gl.uniform4fv(originalColorPtr, new Float32Array(originalColor)); // Reset color
+
+    // Loop
+    requestAnimationFrame(render);
+}
+
+
+
 
             render();
 
@@ -864,13 +909,13 @@
           <input type="range" id="eyeY" step="0.1" min="-20" max="100" value="25"><br/>
   
           <label for="eyeZ">Z</label>
-          <input type="range" id="eyeZ" step="0.1" min="-20" max="100" value="100"><br/>
+          <input type="range" id="eyeZ" step="0.1" min="-20" max="100" value="80"><br/>
         </div>
   
         <div class="section">
           <label class="section-title">ZOOM</label>
           <label for="zoomAngle">Z</label>
-          <input type="range" id="zoomAngle" step="0.1" min="-20" max="100" value="20">
+          <input type="range" id="zoomAngle" step="0.1" min="-20" max="100" value="30">
         </div>
   
         <div class="section">
