@@ -739,53 +739,21 @@
             // //Scaling factor
             // gl.uniform3f(uScaleLocation, 0.5, 0.5, 0.5);
 
-
-                          // Draw a cube at the corner of the wave grid
-              const cornerColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
-              gl.uniform4f(cornerColorPtr, 1.0, 0.0, 0.0, 1.0); // Red cube
-
-              // Setup model matrix for the corner cube
-              let cornerModelMatrix = mat4.create();
-              const offsetX = -5;
-              const offsetY = -5;
-              mat4.translate(cornerModelMatrix, cornerModelMatrix, [offsetX, offsetY, 0]);
-              mat4.scale(cornerModelMatrix, cornerModelMatrix, [0.5, 0.5, 0.5]); // Same scale as wave cubes
-
-              // Pass to shader
-              gl.uniformMatrix4fv(uModelMatrixPointer, false, cornerModelMatrix);
-
-              // Use same cube geometry buffers
-              gl.bindBuffer(gl.ARRAY_BUFFER, verticesBuffer);
-              gl.vertexAttribPointer(aPositionPointer, 4, gl.FLOAT, false, 0, 0);
-
-              gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-              gl.vertexAttribPointer(aNormalPointer, 4, gl.FLOAT, false, 0, 0);
-
-              gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-
-              // Disable instancing for this one cube
-              ext.vertexAttribDivisorANGLE(aInstancePosition, 0);
-
-              // Draw the cube (just once)
-              gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0);
-
-              // Restore instancing divisor
-              ext.vertexAttribDivisorANGLE(aInstancePosition, 1);
-
-
-
 function render() {
     const elapsedTime = performance.now() / 2000;
-
 
     // Update time uniform
     const uTimeLocation = gl.getUniformLocation(program, 'uTime');
     gl.uniform1f(uTimeLocation, elapsedTime);
 
+    const uUseWaveLocation = gl.getUniformLocation(program, 'uUseWave');
+
     // Clear screen
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     // === Wave cubes ===
+    gl.uniform1i(uUseWaveLocation, waveEnabled ? 1 : 0);
+
     var waveModelMatrix = mat4.create();
     mat4.scale(waveModelMatrix, waveModelMatrix, [0.5, 0.5, 0.5]);
     gl.uniformMatrix4fv(uModelMatrixPointer, false, waveModelMatrix);
@@ -799,7 +767,71 @@ function render() {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
     ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, instanceCount * instanceCount);
 
+
+
+
+
+    // === Island cubes ===
+    gl.uniform1i(uUseWaveLocation, 0);  // Always static for islands
+
+    var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
+    gl.uniform4fv(uColorLocation, [0.92, 0.76, 0.46, 1.0]);
+
+    function drawIsland(position, scale, instanceCount) {
+      var islandMatrix = mat4.create();
+      mat4.translate(islandMatrix, islandMatrix, position);
+      mat4.scale(islandMatrix, islandMatrix, scale);
+      gl.uniformMatrix4fv(uModelMatrixPointer, false, islandMatrix);
+      ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, instanceCount);
+    }
+
+    // Usage
+    const islands = [
+      { pos: [58, 0, 41], scale: [1, 1.2, 1], count: 7 },
+      { pos: [60, 0, 40], scale: [1, 1.2, 1], count: 10 },
+      { pos: [62, 0, 38], scale: [1, 1.2, 1], count: 15 },
+      { pos: [64, 0, 36], scale: [1, 1.2, 1], count: 18 },
+      { pos: [66, 0, 36], scale: [1, 1.2, 1], count: 18 },
+      { pos: [68, 0, 39], scale: [1, 1.2, 1], count: 12 },
+      { pos: [70, 0, 42], scale: [1, 1.2, 1], count: 8 },
+    ];
+
+    islands.forEach(({ pos, scale, count }) => drawIsland(pos, scale, count));
+
+
+
+    // === Tree ===
+    var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
+    gl.uniform4fv(uColorLocation, [0.55, 0.27, 0.07, 1.0]);
+
+    var trunkMatrix = mat4.create();
+    mat4.translate(trunkMatrix, trunkMatrix, [66, 0, 42]);
+    mat4.scale(trunkMatrix, trunkMatrix, [0.7, 10, 0.7]);
+    gl.uniformMatrix4fv(uModelMatrixPointer, false, trunkMatrix);
+    ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, 1);
+
+    
+    var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
+    gl.uniform4fv(uColorLocation, [0.13, 0.55, 0.13, 1.0]);
+
+    var leaveMatrix = mat4.create();
+    mat4.translate(leaveMatrix, leaveMatrix, [66, 12, 42]);
+    mat4.scale(leaveMatrix, leaveMatrix, [3, 2, 3]);
+    gl.uniformMatrix4fv(uModelMatrixPointer, false, leaveMatrix);
+    ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, 1);
+
+    var leaveMatrix = mat4.create();
+    mat4.translate(leaveMatrix, leaveMatrix, [66, 14, 42]);
+    mat4.scale(leaveMatrix, leaveMatrix, [2, 2, 2]);
+    gl.uniformMatrix4fv(uModelMatrixPointer, false, leaveMatrix);
+    ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, 1);
+
+
+
+    
+
     // === Boat ===
+    gl.uniform1i(uUseWaveLocation, waveEnabled ? 1 : 0);
     const originalColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
     const originalColor = [0.0, 0.850, 1.0, 1.0];
 
