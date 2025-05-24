@@ -182,7 +182,7 @@
 
         // Function to load the OBJ file
         function loadWakeboard(gl) {
-            fetch('models/wakeboard.obj')
+            fetch('models/boat.obj')
                 .then(response => response.text())
                 .then(text => {
                     parsedObj = new OBJ.Mesh(text);
@@ -664,13 +664,14 @@
             mat4.identity(boatModelMatrix);
 
             // Translate
-            mat4.translate(boatModelMatrix,boatModelMatrix, [gridCenterX, 2.5, gridCenterZ]);
+            mat4.translate(boatModelMatrix,boatModelMatrix, [gridCenterX, -7, gridCenterZ+3]);
             
             // Rotate to orient the boat facing the camera.
-            mat4.rotateX(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90));
-            mat4.rotateZ(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90));
+            //mat4.rotateX(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90));
+            mat4.rotateY(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(90));
+            //mat4.rotateZ(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90));
             // Finally, scale
-            mat4.scale(boatModelMatrix, boatModelMatrix, [0.05, 0.05, 0.05]);
+            mat4.scale(boatModelMatrix, boatModelMatrix, [9, 9, 9]);
             
 
             gl.uniformMatrix4fv(uModelMatrixPointer, false, boatModelMatrix);
@@ -790,12 +791,9 @@ function render() {
 
 
     // === Island cubes ===
-    gl.uniform1i(uUseWaveLocation, 0);  // Always static for islands
+    gl.uniform1i(uUseWaveLocation, 0); 
 
-    var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
-    gl.uniform4fv(uColorLocation, [0.92, 0.76, 0.46, 1.0]);
-
-    function drawIsland(position, scale, instanceCount) {
+    function drawObject(position, scale, instanceCount) {
       var islandMatrix = mat4.create();
       mat4.translate(islandMatrix, islandMatrix, position);
       mat4.scale(islandMatrix, islandMatrix, scale);
@@ -803,18 +801,51 @@ function render() {
       ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, instanceCount);
     }
 
-    // Usage
+    var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
+    gl.uniform4fv(uColorLocation, [0.92, 0.76, 0.46, 1.0]);
+
     const islands = [
-      { pos: [58, 0, 41], scale: [1, 1.2, 1], count: 7 },
-      { pos: [60, 0, 40], scale: [1, 1.2, 1], count: 10 },
-      { pos: [62, 0, 38], scale: [1, 1.2, 1], count: 15 },
-      { pos: [64, 0, 36], scale: [1, 1.2, 1], count: 18 },
-      { pos: [66, 0, 36], scale: [1, 1.2, 1], count: 18 },
-      { pos: [68, 0, 39], scale: [1, 1.2, 1], count: 12 },
-      { pos: [70, 0, 42], scale: [1, 1.2, 1], count: 8 },
+      { pos: [64, 0, 1], scale: [1, 1.2, 1.6], count: 24 },
+      { pos: [62, 0, 1], scale: [1, 1.2, 1.6], count: 21 },
+      { pos: [60, 0, 1], scale: [1, 1.2, 1.6], count: 19 },
+      { pos: [58, 0, 1], scale: [1, 1.2, 1.6], count: 16 },
+      { pos: [56, 0, 1], scale: [1, 1.2, 1.6], count: 10 },
+      { pos: [54, 0, 1], scale: [1, 1.2, 1.6], count: 9 },
+      { pos: [52, 0, 1], scale: [1, 1.2, 1.6], count: 9 },
+      { pos: [50, 0, 1], scale: [1, 1.2, 1.6], count: 8 },
+      { pos: [48, 0, 1], scale: [1, 1.2, 1.6], count: 6 },
+      { pos: [46, 0, 1], scale: [1, 1.2, 1.6], count: 6 },
+      { pos: [44, 0, 1], scale: [1, 1.2, 1.6], count: 6 },
+      { pos: [42, 0, 0], scale: [1, 1.2, 0.6], count: 6 },
+      { pos: [40, 0, 0], scale: [1, 1.2, 0.6], count: 6 },    
+      { pos: [38, 0, 0], scale: [1, 1.2, 0.6], count: 4 },  
+      { pos: [36, 0, 0], scale: [1, 1.2, 0.6], count: 2 },
+      { pos: [34, 0, 0], scale: [1, 1.2, 0.6], count: 2 },
+
+      { pos: [72, 0, 15], scale: [7.6, 1.2, 15.6], count: 1 },
+      { pos: [72, 0, 15], scale: [7.6, 1.2, 15.6], count: 1 },
+
+      { pos: [66, 0, 31], scale: [1, 1.2, 1.6], count: 2 },
+      { pos: [68, 0, 31], scale: [1, 1.2, 1.6], count: 5 },
+      { pos: [70, 0, 31], scale: [1, 1.2, 1.6], count: 7 },
+      { pos: [72, 0, 31], scale: [1, 1.2, 1.6], count: 12 },
+      { pos: [74, 0, 31], scale: [1, 1.2, 1.6], count: 14 },
+      { pos: [76, 0, 31], scale: [1, 1.2, 1.6], count: 15 },
+      { pos: [78, 0, 31], scale: [1.6, 1.2, 1.6], count: 20 },
+      { pos: [79, 0, 31], scale: [0.6, 1.2, 1.6], count: 27 },
+
+      { pos: [54, 0, 55], scale: [1, 1.2, 1], count: 6 },
+      { pos: [56, 0, 54], scale: [1, 1.2, 1], count: 9 },
+      { pos: [58, 0, 53], scale: [1, 1.2, 1], count: 14 },
+      { pos: [60, 0, 51], scale: [1, 1.2, 1], count: 17 },
+      { pos: [62, 0, 50], scale: [1, 1.2, 1], count: 19 },
+      { pos: [64, 0, 50], scale: [1, 1.2, 1], count: 19 },
+      { pos: [66, 0, 50], scale: [1, 1.2, 1], count: 16 },
+      { pos: [68, 0, 51], scale: [1, 1.2, 1], count: 12 },
+      { pos: [70, 0, 52], scale: [1, 1.2, 1], count: 8 },
     ];
 
-    islands.forEach(({ pos, scale, count }) => drawIsland(pos, scale, count));
+    islands.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
 
 
 
@@ -822,31 +853,79 @@ function render() {
     var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
     gl.uniform4fv(uColorLocation, [0.55, 0.27, 0.07, 1.0]);
 
-    var trunkMatrix = mat4.create();
-    mat4.translate(trunkMatrix, trunkMatrix, [66, 0, 42]);
-    mat4.scale(trunkMatrix, trunkMatrix, [0.7, 10, 0.7]);
-    gl.uniformMatrix4fv(uModelMatrixPointer, false, trunkMatrix);
-    ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, 1);
+    const trunks = [
+      { pos: [60, 5, 6], scale: [0.7, 5, 0.7], count: 1 },
+      { pos: [68, 8, 12], scale: [1, 8, 1], count: 1 },
+      { pos: [75, 5, 25], scale: [0.7, 5, 0.7], count: 1 },
+      { pos: [65, 5, 53], scale: [0.7, 5, 0.7], count: 1 },
+    ];
+
+    trunks.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
+
+
 
     
     var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
     gl.uniform4fv(uColorLocation, [0.13, 0.55, 0.13, 1.0]);
 
-    var leaveMatrix = mat4.create();
-    mat4.translate(leaveMatrix, leaveMatrix, [66, 12, 42]);
-    mat4.scale(leaveMatrix, leaveMatrix, [3, 2, 3]);
-    gl.uniformMatrix4fv(uModelMatrixPointer, false, leaveMatrix);
-    ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, 1);
+    const leaves = [
+      { pos: [60, 12, 6], scale: [3, 2, 3], count: 1 },
+      { pos: [60, 14, 6], scale: [2, 2, 2], count: 1 },
+      { pos: [68, 15, 12], scale: [4, 2, 4], count: 1 },
+      { pos: [68, 17, 12], scale: [3, 2, 3], count: 1 },
+      { pos: [75, 12, 25], scale: [3, 2, 3], count: 1 },
+      { pos: [75, 14, 25], scale: [2, 2, 2], count: 1 },
+      { pos: [65, 12, 53], scale: [3, 2, 3], count: 1 },
+      { pos: [65, 14, 53], scale: [2, 2, 2], count: 1 },
+    ];
 
-    var leaveMatrix = mat4.create();
-    mat4.translate(leaveMatrix, leaveMatrix, [66, 14, 42]);
-    mat4.scale(leaveMatrix, leaveMatrix, [2, 2, 2]);
-    gl.uniformMatrix4fv(uModelMatrixPointer, false, leaveMatrix);
-    ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, 1);
-
-
+    leaves.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
 
     
+    var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
+    gl.uniform4fv(uColorLocation, [0.49, 0.5, 0.49, 1.0]);
+
+    const rocks = [
+      { pos: [12, 1, 67], scale: [5, 1, 5], count: 1 },
+      { pos: [17, 1, 67], scale: [3, 2.5, 3], count: 1 },
+      { pos: [14, 1, 69], scale: [4, 4, 4], count: 1 },
+      { pos: [14, 1, 69], scale: [3, 6, 3], count: 1 },
+      { pos: [12.5, 1, 68.5], scale: [4, 1.5, 6], count: 1 },
+      { pos: [11, 1, 67], scale: [3, 5, 4], count: 1 },
+
+      { pos: [24, 1, 74], scale: [2, 1, 2], count: 1 },
+      { pos: [23, 1, 75], scale: [1.5, 2.5, 1], count: 1 },
+      { pos: [24.5, 1, 75.5], scale: [2, 1.5, 1.5], count: 1 },
+
+      { pos: [68, 1, 30], scale: [1, 1, 1], count: 1 },
+      { pos: [68, 1, 31], scale: [1, 2, 1], count: 1 },
+      { pos: [68.5, 1, 31.5], scale: [1, 1.5, 1], count: 1 },
+
+      { pos: [60, 1, 56], scale: [1, 1, 1], count: 1 },
+      { pos: [60, 1, 57], scale: [1, 2, 1], count: 1 },
+      { pos: [60.5, 1, 57.5], scale: [1, 1.5, 1], count: 1 },
+
+      { pos: [63.5, 1, 59.5], scale: [0.6, 0.8, 0.5], count: 1 },
+      { pos: [64, 1, 58.5], scale: [0.6, 1, 0.8], count: 1 },
+    ];
+
+    rocks.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
+
+
+
+
+    var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
+    gl.uniform4fv(uColorLocation, [1.0, 0.0, 0.0, 1.0]);
+
+    const spots = [
+      { pos: [62, 1, 63], scale: [2, 0.3, 0.3], count: 1 },
+      { pos: [62, 1, 63], scale: [0.3, 0.3, 2], count: 1 },
+    ];
+
+    spots.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
+
+
+
 
     // === Boat ===
     gl.uniform1i(uUseWaveLocation, waveEnabled ? 1 : 0);
@@ -858,7 +937,7 @@ function render() {
     gl.uniform1i(uTextureLocation, 0);
     gl.uniform1i(uUseTextureLocation, true);
 
-    gl.uniform4f(originalColorPtr, 0.7, 0.7, 0.7, 1.0); // Boat color
+    gl.uniform4f(originalColorPtr, 0.5, 0.3, 0.25, 1.0); // Boat color
     renderBoat();
     gl.uniform4fv(originalColorPtr, new Float32Array(originalColor)); // Reset color
     gl.uniform1i(uUseTextureLocation, false);
@@ -953,19 +1032,19 @@ function render() {
           <label class="section-title">EYE POSITION</label>
 
           <label for="eyeX">X</label>
-          <input type="range" id="eyeX" step="0.1" min="0" max="100" value="80"><br/>
+          <input type="range" id="eyeX" step="0.1" min="0" max="100" value="100"><br/>
   
           <label for="eyeY">Y</label>
-          <input type="range" id="eyeY" step="0.1" min="-20" max="100" value="25"><br/>
+          <input type="range" id="eyeY" step="0.1" min="-20" max="100" value="50"><br/>
   
           <label for="eyeZ">Z</label>
-          <input type="range" id="eyeZ" step="0.1" min="-20" max="100" value="80"><br/>
+          <input type="range" id="eyeZ" step="0.1" min="-20" max="100" value="90"><br/>
         </div>
   
         <div class="section">
           <label class="section-title">ZOOM</label>
           <label for="zoomAngle">Z</label>
-          <input type="range" id="zoomAngle" step="0.1" min="1" max="100" value="30">
+          <input type="range" id="zoomAngle" step="0.1" min="1" max="100" value="40">
         </div>
   
         <div class="section">
