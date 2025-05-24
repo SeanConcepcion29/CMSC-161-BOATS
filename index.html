@@ -151,7 +151,7 @@
 
         // Function to load the OBJ file
         function loadWakeboard(gl) {
-            fetch('models/wakeboard.obj')
+            fetch('models/ship-1-model_1.obj')
                 .then(response => response.text())
                 .then(text => {
                     parsedObj = new OBJ.Mesh(text);
@@ -636,10 +636,10 @@
             mat4.translate(boatModelMatrix,boatModelMatrix, [gridCenterX, 2.5, gridCenterZ]);
             
             // Rotate to orient the boat facing the camera.
-            mat4.rotateX(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90));
-            mat4.rotateZ(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90));
+            // mat4.rotateX(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90));
+            // mat4.rotateZ(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90));
             // Finally, scale
-            mat4.scale(boatModelMatrix, boatModelMatrix, [0.05, 0.05, 0.05]);
+            mat4.scale(boatModelMatrix, boatModelMatrix, [1,1,1]);
             
 
             gl.uniformMatrix4fv(uModelMatrixPointer, false, boatModelMatrix);
