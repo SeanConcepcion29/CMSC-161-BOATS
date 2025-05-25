@@ -43,12 +43,24 @@
       varying vec4 vDiffuseColor;
 
       varying vec2 vTexCoord;  // Pass texture coordinates to fragment shader
+
+      varying float vWaveHeight;
       
 
       void main() {
 
         // Calculate wave height based on whether it is on or not.
-        float waveHeight = uUseWave ? sin(uTime * 2.0 + (aInstancePosition.x + aInstancePosition.y)) * 0.5 : 0.0;
+        float wave1 = sin(uTime * 2.0 + aInstancePosition.x * 0.7 + aInstancePosition.y * 0.4);
+        float wave2 = sin(uTime * 3.0 + aInstancePosition.x * 1.3 - aInstancePosition.y * 0.9);
+        float wave3 = sin(uTime * 1.5 + aInstancePosition.x * 0.2 + aInstancePosition.y * 1.7);
+        float waveHeight;
+        if (uUseWave) {
+            waveHeight = wave1 * 0.3 + wave2 * 0.2 + wave3 * 0.1;
+        } else {
+            waveHeight = 0.0;
+        }
+        vWaveHeight = waveHeight;
+
 
         // Apply instance position and wave height
         mat4 modelMatrix = uModelMatrix;
@@ -111,17 +123,36 @@
       varying vec4 vSpecularColor;
       varying vec4 vAmbientColor;
       varying vec2 vTexCoord;
-  
+      varying float vWaveHeight;
+      
+      uniform bool uUseWave;
       uniform sampler2D uTexture;  // Texture sampler
       uniform bool uUseTexture;    // Flag to enable/disable texture
 
       void main() {
+
+        //change color based on height
+        float t = clamp(vWaveHeight + 0.5, 0.0, 1.0);
+        t = pow(t, 2.0); // for sharper white at the top
+        vec3 lowColor = vec3(0.0, 0.2, 0.7);
+        vec3 highColor = vec3(0.6, 0.75, 1.0);
+        vec3 dynamicDiffuse = mix(lowColor, highColor, t);
+
+        // Use the lighting intensity from vDiffuseColor, but replace the color
+        float diffuseIntensity = length(vDiffuseColor.rgb); 
+        vec4 coloredDiffuse = vec4(dynamicDiffuse * diffuseIntensity, 1.0);
+
         if (uUseTexture) {
           // Get texture color and combine with lighting
           vec4 texColor = texture2D(uTexture, vTexCoord);
           gl_FragColor = (vAmbientColor + vDiffuseColor + vSpecularColor) * texColor;
         } else {
-          gl_FragColor = vAmbientColor + vDiffuseColor + vSpecularColor;
+          if (uUseWave){
+            gl_FragColor = vAmbientColor + coloredDiffuse + vSpecularColor;
+          }else{
+            gl_FragColor = vAmbientColor + vDiffuseColor + vSpecularColor;
+          }
+          
         }
         
       }
@@ -285,14 +316,14 @@
             var fieldOfViewYAxis = glMatrix.toRadian(30);
             var aspectRatio = canvas.width / canvas.height;
             var nearPlane = 1;
-            var farPlane = 100;
+            var farPlane = 200;
 
             projectionMatrix = mat4.create();
             mat4.perspective(projectionMatrix, fieldOfViewYAxis, aspectRatio, nearPlane, farPlane);
             gl.uniformMatrix4fv(uProjectionMatrixPointer, false, new Float32Array(projectionMatrix));
 
             /* Number of Wave Cubes Instanced */
-            const instanceCount = 100;
+            const instanceCount = 80;
 
             /* Sets up view matrix specification */
 
@@ -473,7 +504,7 @@
 
             /* Sets up coordinates for the object */
             var vertices = [  
-    
+  
                 /* Front face */
                 -1.0, -1.0,  1.0, 1.0,
                 1.0, -1.0,  1.0, 1.0,
@@ -633,7 +664,7 @@
             mat4.identity(boatModelMatrix);
 
             // Translate
-            mat4.translate(boatModelMatrix,boatModelMatrix, [gridCenterX, 2.5, gridCenterZ]);
+            mat4.translate(boatModelMatrix,boatModelMatrix, [gridCenterX, -7, gridCenterZ+3]);
             
             // Rotate to orient the boat facing the camera.
             // mat4.rotateX(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90));
@@ -721,58 +752,259 @@
 
             gl.bindBuffer(gl.ARRAY_BUFFER, instanceBuffer);
             gl.vertexAttribPointer(aInstancePosition, 2, gl.FLOAT, false, 0, 0);
-            ext.vertexAttribDivisorANGLE(aInstancePosition, 1); // One instance per position
+            ext.vertexAttribDivisorANGLE(aInstancePosition, 1);
             
             // //Scaling factor
             // gl.uniform3f(uScaleLocation, 0.5, 0.5, 0.5);
 
-            /* Function for rendering the objects on canvas*/
-            function render() {
-                
-                const elapsedTime = performance.now() / 1000;
+function render() {
+    const elapsedTime = performance.now() / 2000;
 
-                /* Update the time uniform */
-                const uTimeLocation = gl.getUniformLocation(program, 'uTime');
-                gl.uniform1f(uTimeLocation, elapsedTime);
+    // Update time uniform
+    const uTimeLocation = gl.getUniformLocation(program, 'uTime');
+    gl.uniform1f(uTimeLocation, elapsedTime);
 
-                /* Clears screen */
-                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    const uUseWaveLocation = gl.getUniformLocation(program, 'uUseWave');
 
-                // Reset model matrix to identity
-                var modelMatrix = mat4.create();
-                
+    // Clear screen
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-                /* Now draw the wave cubes */
-                gl.bindBuffer(gl.ARRAY_BUFFER, verticesBuffer);
-                gl.vertexAttribPointer(aPositionPointer, 4, gl.FLOAT, false, 0, 0);
-                
-                gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-                gl.vertexAttribPointer(aNormalPointer, 4, gl.FLOAT, false, 0, 0);
-                
-                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    // === Wave cubes ===
+    gl.uniform1i(uUseWaveLocation, waveEnabled ? 1 : 0);
 
-                // wave model matrix
-                var waveModelMatrix = mat4.create();
-                mat4.scale(waveModelMatrix, waveModelMatrix, [0.5, 0.5, 0.5]);
-                gl.uniformMatrix4fv(uModelMatrixPointer, false, waveModelMatrix);
+    var waveModelMatrix = mat4.create();
+    mat4.scale(waveModelMatrix, waveModelMatrix, [0.5, 0.5, 0.5]);
+    gl.uniformMatrix4fv(uModelMatrixPointer, false, waveModelMatrix);
 
-                ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, instanceCount * instanceCount);
+    gl.bindBuffer(gl.ARRAY_BUFFER, verticesBuffer);
+    gl.vertexAttribPointer(aPositionPointer, 4, gl.FLOAT, false, 0, 0);
 
-                const originalColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
-                const originalColor = [0.0, 0.850, 1.0, 1.0];
+    gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+    gl.vertexAttribPointer(aNormalPointer, 4, gl.FLOAT, false, 0, 0);
 
-                // Bind the texture
-                gl.activeTexture(gl.TEXTURE0);                     // Activate texture unit 0
-                gl.bindTexture(gl.TEXTURE_2D, wakeboardTexture);   // Bind your texture
-                gl.uniform1i(uTextureLocation, 0);                 // Set sampler to texture unit 0
-                gl.uniform1i(uUseTextureLocation, true);           // Tell shader to use the texture
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, instanceCount * instanceCount);
 
-                gl.uniform4f(originalColorPtr, 0.7, 0.7, 0.7, 1.0); // Boat color
-                renderBoat(/*elapsedTime*/);
-                gl.uniform4fv(originalColorPtr, new Float32Array(originalColor)); // Reset color
 
-                requestAnimationFrame(render);
-            }
+
+
+
+    // === Island cubes ===
+    gl.uniform1i(uUseWaveLocation, 0); 
+
+    function drawObject(position, scale, instanceCount) {
+      var islandMatrix = mat4.create();
+      mat4.translate(islandMatrix, islandMatrix, position);
+      mat4.scale(islandMatrix, islandMatrix, scale);
+      gl.uniformMatrix4fv(uModelMatrixPointer, false, islandMatrix);
+      ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, instanceCount);
+    }
+
+    var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
+    gl.uniform4fv(uColorLocation, [0.92, 0.76, 0.46, 1.0]);
+
+    const islands = [
+      { pos: [64, 0, 1], scale: [1, 1.2, 1.6], count: 24 },
+      { pos: [62, 0, 1], scale: [1, 1.2, 1.6], count: 21 },
+      { pos: [60, 0, 1], scale: [1, 1.2, 1.6], count: 19 },
+      { pos: [58, 0, 1], scale: [1, 1.2, 1.6], count: 16 },
+      { pos: [56, 0, 1], scale: [1, 1.2, 1.6], count: 10 },
+      { pos: [54, 0, 1], scale: [1, 1.2, 1.6], count: 9 },
+      { pos: [52, 0, 1], scale: [1, 1.2, 1.6], count: 9 },
+      { pos: [50, 0, 1], scale: [1, 1.2, 1.6], count: 8 },
+      { pos: [48, 0, 1], scale: [1, 1.2, 1.6], count: 6 },
+      { pos: [46, 0, 1], scale: [1, 1.2, 1.6], count: 6 },
+      { pos: [44, 0, 1], scale: [1, 1.2, 1.6], count: 6 },
+      { pos: [42, 0, 0], scale: [1, 1.2, 0.6], count: 6 },
+      { pos: [40, 0, 0], scale: [1, 1.2, 0.6], count: 6 },    
+      { pos: [38, 0, 0], scale: [1, 1.2, 0.6], count: 4 },  
+      { pos: [36, 0, 0], scale: [1, 1.2, 0.6], count: 2 },
+      { pos: [34, 0, 0], scale: [1, 1.2, 0.6], count: 2 },
+
+      { pos: [72, 0, 15], scale: [7.6, 1.2, 15.6], count: 1 },
+      { pos: [72, 0, 15], scale: [7.6, 1.2, 15.6], count: 1 },
+
+      { pos: [66, 0, 31], scale: [1, 1.2, 1.6], count: 2 },
+      { pos: [68, 0, 31], scale: [1, 1.2, 1.6], count: 5 },
+      { pos: [70, 0, 31], scale: [1, 1.2, 1.6], count: 7 },
+      { pos: [72, 0, 31], scale: [1, 1.2, 1.6], count: 12 },
+      { pos: [74, 0, 31], scale: [1, 1.2, 1.6], count: 14 },
+      { pos: [76, 0, 31], scale: [1, 1.2, 1.6], count: 15 },
+      { pos: [78, 0, 31], scale: [1.6, 1.2, 1.6], count: 20 },
+      { pos: [79, 0, 31], scale: [0.6, 1.2, 1.6], count: 27 },
+
+      { pos: [54, 0, 55], scale: [1, 1.2, 1], count: 6 },
+      { pos: [56, 0, 54], scale: [1, 1.2, 1], count: 9 },
+      { pos: [58, 0, 53], scale: [1, 1.2, 1], count: 14 },
+      { pos: [60, 0, 51], scale: [1, 1.2, 1], count: 17 },
+      { pos: [62, 0, 50], scale: [1, 1.2, 1], count: 19 },
+      { pos: [64, 0, 50], scale: [1, 1.2, 1], count: 19 },
+      { pos: [66, 0, 50], scale: [1, 1.2, 1], count: 16 },
+      { pos: [68, 0, 51], scale: [1, 1.2, 1], count: 12 },
+      { pos: [70, 0, 52], scale: [1, 1.2, 1], count: 8 },
+
+      { pos: [1, 0, 28], scale: [1.6, 1.2, 12], count: 12 },
+      { pos: [3, 0, 20], scale: [1.6, 1.2, 1], count: 30 },
+      { pos: [5, 0, 22], scale: [1.6, 1.2, 1], count: 26 },
+      { pos: [7, 0, 22], scale: [1.6, 1.2, 1], count: 23 },
+      { pos: [9, 0, 27], scale: [1.6, 1.2, 1], count: 18 },
+      { pos: [11, 0, 28], scale: [1.6, 1.2, 1], count: 15 },
+    ];
+
+    islands.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
+
+
+
+    // === Tree ===
+    var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
+    gl.uniform4fv(uColorLocation, [0.55, 0.27, 0.07, 1.0]);
+
+    const trunks = [
+      { pos: [56, 5, 4], scale: [0.7, 5, 0.7], count: 1 },
+      { pos: [68, 9, 12], scale: [1, 9, 1], count: 1 },
+      { pos: [75, 5, 18], scale: [0.7, 5, 0.7], count: 1 },
+      { pos: [65, 5, 53], scale: [0.7, 5, 0.7], count: 1 },
+      { pos: [76, 11, 6], scale: [1, 11, 1], count: 1 },
+      { pos: [65, 4, 19], scale: [0.7, 4, 0.7], count: 1 },
+      { pos: [76, 4, 36], scale: [0.7, 4, 0.7], count: 1 },
+      { pos: [45, 3, 2], scale: [0.7, 5, 0.7], count: 1 },
+      { pos: [4, 5, 44], scale: [0.7, 5, 0.7], count: 1 },
+    ];
+
+    trunks.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
+
+
+
+    
+    var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
+    gl.uniform4fv(uColorLocation, [0.13, 0.55, 0.13, 1.0]);
+
+    const leaves = [
+      { pos: [56, 12, 4], scale: [3, 2, 3], count: 1 },
+      { pos: [56, 14, 4], scale: [2, 2, 2], count: 1 },
+
+      { pos: [68, 16, 12], scale: [4, 2, 4], count: 1 },
+      { pos: [68, 18, 12], scale: [3, 2, 3], count: 1 },
+
+      { pos: [75, 12, 18], scale: [3, 2, 3], count: 1 },
+      { pos: [75, 14, 18], scale: [2, 2, 2], count: 1 },
+
+      { pos: [65, 12, 53], scale: [3, 2, 3], count: 1 },
+      { pos: [65, 14, 53], scale: [2, 2, 2], count: 1 },
+
+      { pos: [76, 19, 6], scale: [4, 2, 4], count: 1 },
+      { pos: [76, 21, 6], scale: [3, 2, 3], count: 1 },
+
+      { pos: [65, 10, 19], scale: [3, 2, 3], count: 1 },
+      { pos: [65, 12, 19], scale: [2, 2, 2], count: 1 },
+
+      { pos: [76, 10, 36], scale: [3, 2, 3], count: 1 },
+      { pos: [76, 12, 36], scale: [2, 2, 2], count: 1 },
+
+      { pos: [45, 9, 2], scale: [3, 2, 3], count: 1 },
+      { pos: [45, 11, 2], scale: [2, 2, 2], count: 1 },
+
+      { pos: [4, 9, 44], scale: [3, 2, 3], count: 1 },
+      { pos: [4, 11, 44], scale: [2, 2, 2], count: 1 },
+      
+    ];
+
+    leaves.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
+
+    
+    var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
+    gl.uniform4fv(uColorLocation, [0.49, 0.5, 0.49, 1.0]);
+
+    const rocks = [
+      { pos: [12, 1, 67], scale: [5, 1, 5], count: 1 },
+      { pos: [17, 1, 67], scale: [3, 2.5, 3], count: 1 },
+      { pos: [14, 1, 69], scale: [4, 4, 4], count: 1 },
+      { pos: [14, 1, 69], scale: [3, 6, 3], count: 1 },
+      { pos: [12.5, 1, 68.5], scale: [4, 1.5, 6], count: 1 },
+      { pos: [11, 1, 67], scale: [3, 5, 4], count: 1 },
+
+      { pos: [24, 1, 74], scale: [2, 1, 2], count: 1 },
+      { pos: [23, 1, 75], scale: [1.5, 2.5, 1], count: 1 },
+      { pos: [24.5, 1, 75.5], scale: [2, 1.5, 1.5], count: 1 },
+
+      { pos: [68, 1, 30], scale: [1, 1, 1], count: 1 },
+      { pos: [68, 1, 31], scale: [1, 2, 1], count: 1 },
+      { pos: [68.5, 1, 31.5], scale: [1, 1.5, 1], count: 1 },
+
+      { pos: [60, 1, 56], scale: [1, 1, 1], count: 1 },
+      { pos: [60, 1, 57], scale: [1, 2, 1], count: 1 },
+      { pos: [60.5, 1, 57.5], scale: [1, 1.5, 1], count: 1 },
+
+      { pos: [63.5, 1, 59.5], scale: [0.6, 0.8, 0.5], count: 1 },
+      { pos: [64, 1, 58.5], scale: [0.6, 1, 0.8], count: 1 },
+
+      { pos: [77, 1, 42], scale: [0.8, 0.8, 0.8], count: 1 },
+      { pos: [77, 1, 43], scale: [0.8, 1.5, 0.8], count: 1 },
+      { pos: [77.5, 1, 43.5], scale: [0.8, 1, 0.8], count: 1 },
+
+      { pos: [4, 1, 25], scale: [0.8, 0.8, 0.8], count: 2 },
+      { pos: [5, 1, 25], scale: [0.8, 1.8, 0.8], count: 1 },
+      { pos: [5, 1, 26], scale: [0.8, 2.5, 0.8], count: 1 },
+      { pos: [5.5, 1, 26.5], scale: [0.8, 1.6, 1], count: 1 },
+
+      { pos: [4, 1, 30], scale: [0.7, 1, 0.7], count: 1 },
+
+
+    ];
+
+    rocks.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
+
+
+
+
+    var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
+    gl.uniform4fv(uColorLocation, [1.0, 0.0, 0.0, 1.0]);
+
+    const spots = [
+      { pos: [62, 1, 63], scale: [2, 0.3, 0.3], count: 1 },
+      { pos: [62, 1, 63], scale: [0.3, 0.3, 2], count: 1 },
+    ];
+
+    spots.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
+
+
+
+    var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
+    gl.uniform4fv(uColorLocation, [0.5, 0.3, 0.25, 1.0]);
+
+    const decks = [
+      { pos: [15, 0, 32], scale: [4.5, 1.1, 1], count: 4 },
+      { pos: [19, 0, 31], scale: [0.4, 2, 0.4], count: 1 },
+      { pos: [19, 0, 36], scale: [0.4, 2, 0.4], count: 1 },
+      { pos: [12.5, 0, 31], scale: [0.4, 2, 0.4], count: 1 },
+      { pos: [12.5, 0, 36], scale: [0.4, 2, 0.4], count: 1 },
+    ];
+
+    decks.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
+
+
+
+
+    // === Boat ===
+    gl.uniform1i(uUseWaveLocation, waveEnabled ? 1 : 0);
+    const originalColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
+    const originalColor = [0.0, 0.850, 1.0, 1.0];
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, wakeboardTexture);
+    gl.uniform1i(uTextureLocation, 0);
+    gl.uniform1i(uUseTextureLocation, true);
+
+    gl.uniform4f(originalColorPtr, 0.5, 0.3, 0.25, 1.0); // Boat color
+    renderBoat();
+    gl.uniform4fv(originalColorPtr, new Float32Array(originalColor)); // Reset color
+    gl.uniform1i(uUseTextureLocation, false);
+    // Loop
+    requestAnimationFrame(render);
+}
+
+
+
 
             render();
 
@@ -858,19 +1090,19 @@
           <label class="section-title">EYE POSITION</label>
 
           <label for="eyeX">X</label>
-          <input type="range" id="eyeX" step="0.1" min="0" max="50" value="25"><br/>
+          <input type="range" id="eyeX" step="0.1" min="0" max="100" value="100"><br/>
   
           <label for="eyeY">Y</label>
-          <input type="range" id="eyeY" step="0.1" min="-20" max="20" value="17"><br/>
+          <input type="range" id="eyeY" step="0.1" min="-20" max="100" value="50"><br/>
   
           <label for="eyeZ">Z</label>
-          <input type="range" id="eyeZ" step="0.1" min="-20" max="100" value="100"><br/>
+          <input type="range" id="eyeZ" step="0.1" min="-20" max="100" value="90"><br/>
         </div>
   
         <div class="section">
           <label class="section-title">ZOOM</label>
           <label for="zoomAngle">Z</label>
-          <input type="range" id="zoomAngle" step="0.1" min="-20" max="100" value="20">
+          <input type="range" id="zoomAngle" step="0.1" min="1" max="100" value="40">
         </div>
   
         <div class="section">
