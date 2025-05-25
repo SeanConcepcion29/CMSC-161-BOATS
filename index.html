@@ -83,7 +83,7 @@
         vec4 normalized_uEyeVector = normalize(-viewPos); 
         vec4 normalized_uReflectedLightVector = normalize(2.0 * dot(normalized_uLightDirectionVector,normalized_aNormalVector) * normalized_aNormalVector - normalized_uLightDirectionVector);
         float specularAngle = max(dot(normalized_uEyeVector,normalized_uReflectedLightVector),0.0);
-        float specular = pow(specularAngle, 256.0);
+        float specular = pow(specularAngle, 8.0);
 
         vec4 ambientColor = ambient * uLightColor * uMaterialDiffuseColor;
         vec4 specularColor = uSpecularStrength * specular * uLightColor * uMaterialDiffuseColor;
@@ -515,6 +515,7 @@
 
               // If time is between 6 AM to 5 PM, set light intensity to bright
               if(currentHour < 18 && currentHour >= 6){
+                gl.clearColor(0.0, 0.0, 0.0, 0.0);
                 gl.uniform1f(uSpecularStrengthPtr, 0.8);
                 gl.uniform1f(uAmbientStrengthPtr, 0.3);
 
@@ -524,8 +525,9 @@
 
               // If time is between 6 PM to 5 AM, set light intensity to dim
               else{
+                gl.clearColor(0.3, 0.3, 0.3, 1.0);
                 gl.uniform1f(uSpecularStrengthPtr, 0.5);
-                gl.uniform1f(uAmbientStrengthPtr, 0.05);
+                gl.uniform1f(uAmbientStrengthPtr, 0.1);
 
                 // Change button text to DAY
                 document.querySelector("#lightingbtn").innerText = "DAY";
