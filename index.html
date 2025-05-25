@@ -735,12 +735,21 @@
             let boatModelMatrix = mat4.create();
             mat4.identity(boatModelMatrix);
 
+
+            // Rotate to orient the boat facing the camera.
+            // mat4.rotateX(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90));
+            mat4.rotateY(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(90));
+
+            var normalMatrix = mat4.create();
+            mat4.invert(normalMatrix, boatModelMatrix);
+            mat4.transpose(normalMatrix, normalMatrix);
+            gl.uniformMatrix4fv(uNormalMatrixPtr, false, normalMatrix);
+
             // Translate
             mat4.translate(boatModelMatrix,boatModelMatrix, [gridCenterX, -7, gridCenterZ+3]);
             
-            // Rotate to orient the boat facing the camera.
-            // mat4.rotateX(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90));
-            //mat4.rotateY(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(90));
+            
+            
             // Finally, scale
             mat4.scale(boatModelMatrix, boatModelMatrix, [9, 9, 9]);
             
