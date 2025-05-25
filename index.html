@@ -240,6 +240,44 @@
         function isPowerOf2(value) {
             return (value & (value - 1)) === 0;
         }
+
+
+        // Global variable to store the uploaded texture
+        var customTexture = null;
+
+        // Function to load a custom texture from an uploaded image
+        function loadCustomTexture() {
+            const fileInput = document.getElementById('textureUpload');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select an image file first!');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const image = new Image();
+                image.onload = function() {
+                    // Create a new texture from the uploaded image
+                    const gl = document.getElementById('main_canvas').getContext('webgl');
+                    if (!gl) return;
+
+                    customTexture = gl.createTexture();
+                    gl.bindTexture(gl.TEXTURE_2D, customTexture);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+
+                    // Set texture parameters (necessary for non-power-of-2 images)
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+
+                    console.log('Custom texture loaded successfully!');
+                };
+                image.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
         
         /* MAIN PROGRAM */
         function main() {
@@ -257,7 +295,7 @@
             loadWakeboard(gl);
 
            // const wakeboardTexture = loadTexture(gl, 'textures/white-wooden-texture-flooring-background.jpg');
-           const wakeboardTexture = loadTexture(gl, 'textures/white-wooden-texture-flooring-background.jpg');
+           const wakeboardTexture = loadTexture(gl, 'textures/wooden-warm-texture.jpg');
 
             
 
@@ -640,13 +678,15 @@
            function renderBoat() {
             if (!mesh) return;
 
-            // Enable texture only if we have texture coordinates
-            const useTexture = mesh.hasTextureCoords && wakeboardTexture;
+            // Use custom texture if available, otherwise fall back to default
+            const textureToUse = customTexture || wakeboardTexture;
+            const useTexture = mesh.hasTextureCoords && textureToUse;
+
             gl.uniform1i(uUseTextureLocation, useTexture ? 1 : 0);
-            
+
             if (useTexture) {
                 gl.activeTexture(gl.TEXTURE0);
-                gl.bindTexture(gl.TEXTURE_2D, wakeboardTexture);
+                gl.bindTexture(gl.TEXTURE_2D, textureToUse);
                 gl.uniform1i(uTextureLocation, 0);
             }
 
@@ -668,9 +708,9 @@
             
             // Rotate to orient the boat facing the camera.
             // mat4.rotateX(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90));
-            // mat4.rotateZ(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90));
+            mat4.rotateY(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(90));
             // Finally, scale
-            mat4.scale(boatModelMatrix, boatModelMatrix, [1,1,1]);
+            mat4.scale(boatModelMatrix, boatModelMatrix, [9, 9, 9]);
             
 
             gl.uniformMatrix4fv(uModelMatrixPointer, false, boatModelMatrix);
@@ -1132,7 +1172,15 @@ function render() {
   
         <label class="section-title-btn">SET TIME TO </label>
         <button id="lightingbtn" onclick="toggleLighting()">DAY</button>
+
+        <div class="section">
+        <label class="section-title">TEXTURE UPLOAD</label>
+        <input type="file" id="textureUpload" accept="image/*" />
+        <button onclick="loadCustomTexture()">Apply Texture</button>
+        </div>
       </div>
+
+
   
       <!-- Canvas area -->
       <div class="canvas-container">
