@@ -13,6 +13,7 @@
       attribute vec2 aInstancePosition;
       uniform float uTime;
       // uniform vec3 uScale; 
+      uniform bool uShowNormals;
 
       uniform bool uUseWave;
 
@@ -45,6 +46,8 @@
       varying vec2 vTexCoord;  // Pass texture coordinates to fragment shader
 
       varying float vWaveHeight;
+
+      varying vec4 vNormal; //shows normal
       
 
       void main() {
@@ -63,71 +66,55 @@
 
 
         // Apply instance position and wave height
-        mat4 modelMatrix = uModelMatrix;
-        modelMatrix[3].xyz += vec3(aInstancePosition.x, waveHeight, aInstancePosition.y);
+        vec4 worldPosition = uModelMatrix * aPosition;
+        worldPosition.xyz += vec3(aInstancePosition.x, waveHeight, aInstancePosition.y);
+        gl_Position = uProjectionMatrix * uViewMatrix * worldPosition;
 
-        // Create instance translation
-        mat4 instanceTranslate = mat4(
-          1.0, 0.0, 0.0, 0.0,
-          0.0, 1.0, 0.0, 0.0,
-          0.0, 0.0, 1.0, 0.0,
-          aInstancePosition.x, waveHeight, aInstancePosition.y, 1.0
-        );
-
-        // Apply scaling
-        /*mat4 scaleMatrix = mat4(
-          uScale.x, 0.0, 0.0, 0.0,
-          0.0, uScale.y, 0.0, 0.0,
-          0.0, 0.0, uScale.z, 0.0,
-          0.0, 0.0, 0.0, 1.0
-        );*/
-        // modelMatrix = modelMatrix * scaleMatrix;
-
-        // Transform vertex position
-        gl_Position = uProjectionMatrix * uViewMatrix * modelMatrix * aPosition;
-          
-        //Ambient
+        // Lighting calculations
         vec4 ambient = uAmbientStrength * uLightColor;
-
-        //Diffuse
         vec4 corrected_aNormal = uNormalMatrix * aNormal;
         vec4 normalized_aNormalVector = normalize(corrected_aNormal);
         vec4 normalized_uLightDirectionVector = normalize(uLightDirectionVector);
         float lambertCoefficient = max(dot(normalized_uLightDirectionVector, normalized_aNormalVector), 0.0);
 
-        //Specular
+        // Specular
         vec4 viewPos = uViewMatrix * uModelMatrix * aPosition;
         vec4 normalized_uEyeVector = normalize(-viewPos); 
         vec4 normalized_uReflectedLightVector = normalize(2.0 * dot(normalized_uLightDirectionVector,normalized_aNormalVector) * normalized_aNormalVector - normalized_uLightDirectionVector);
         float specularAngle = max(dot(normalized_uEyeVector,normalized_uReflectedLightVector),0.0);
-        float specular = pow(specularAngle, 16.0);
+        float specular = pow(specularAngle, 256.0);
 
         vec4 ambientColor = ambient * uLightColor * uMaterialDiffuseColor;
         vec4 specularColor = uSpecularStrength * specular * uLightColor * uMaterialDiffuseColor;
         vec4 diffuseColor =  lambertCoefficient * uLightColor * uMaterialDiffuseColor ;
-        
-        vAmbientColor = vec4(ambientColor.r, ambientColor.g, ambientColor.b, 1.0);
-        vSpecularColor = vec4(specularColor.r, specularColor.g, specularColor.b, 1.0);
-        vDiffuseColor = vec4(diffuseColor.r, diffuseColor.g, diffuseColor.b, 1.0);
-        vTexCoord = aTexCoord;  // Pass texture coordinates to fragment shader
 
+        vAmbientColor = vec4(ambientColor.rgb, 1.0);
+        vSpecularColor = vec4(specularColor.rgb, 1.0);
+        vDiffuseColor = vec4(diffuseColor.rgb, 1.0);
+        vTexCoord = aTexCoord;
+
+        // For normal visualization
+        vNormal = corrected_aNormal;
       }
     </script>
 
 
-   // FRAGMENT SHADER
-<script type="x-shader/x-fragment" id="fshader">
-  precision mediump float;
-  varying vec4 vDiffuseColor;
-  varying vec4 vSpecularColor;
-  varying vec4 vAmbientColor;
-  varying vec2 vTexCoord;
-  varying float vWaveHeight;
-  
-  uniform bool uUseWave;
-  uniform sampler2D uTexture;  // Texture sampler
-  uniform bool uUseTexture;    // Flag to enable/disable texture
-  uniform vec4 uLightColor;    // Add light color uniform
+    <!-- FRAGMENT SHADER -->
+    <script type="x-shader/x-fragment" id="fshader">
+
+      precision mediump float;
+      varying vec4 vDiffuseColor;
+      varying vec4 vSpecularColor;
+      varying vec4 vAmbientColor;
+      varying vec2 vTexCoord;
+      varying float vWaveHeight;
+      varying vec4 vNormal;
+      
+      uniform bool uUseWave;
+      uniform sampler2D uTexture;  // Texture sampler
+      uniform bool uUseTexture;    // Flag to enable/disable texture
+      uniform bool uShowNormals;
+
 
   void main() {
     //change color based on height
@@ -137,24 +124,33 @@
     vec3 highColor = vec3(0.6, 0.75, 1.0) * uLightColor.rgb;
     vec3 dynamicDiffuse = mix(lowColor, highColor, t);
 
-    // Use the lighting intensity from vDiffuseColor, but replace the color
-    float diffuseIntensity = length(vDiffuseColor.rgb); 
-    vec4 coloredDiffuse = vec4(dynamicDiffuse * diffuseIntensity, 1.0);
+        // Use the lighting intensity from vDiffuseColor, but replace the color
+        float diffuseIntensity = length(vDiffuseColor.rgb); 
+        vec4 coloredDiffuse = vec4(dynamicDiffuse * diffuseIntensity, 1.0);
 
-    if (uUseTexture) {
-      // Get texture color and combine with lighting
-      vec4 texColor = texture2D(uTexture, vTexCoord);
-      gl_FragColor = (vAmbientColor + vDiffuseColor + vSpecularColor) * texColor;
-    } else {
-      if (uUseWave){
-        gl_FragColor = vAmbientColor + coloredDiffuse + vSpecularColor;
-      }else{
-        gl_FragColor = vAmbientColor + vDiffuseColor + vSpecularColor;
+        if (uShowNormals) {
+          // Map normalized normal from [-1,1] to [0,1] for display
+          vec3 normalColor = normalize(vNormal.xyz) * 0.5 + 0.5;
+          gl_FragColor = vec4(normalColor, 1.0);
+          return;
+        }
+        
+        if (uUseTexture) {
+          // Get texture color and combine with lighting
+          vec4 texColor = texture2D(uTexture, vTexCoord);
+          gl_FragColor = (vAmbientColor + vDiffuseColor + vSpecularColor) * texColor;
+        } else {
+          if (uUseWave){
+            gl_FragColor = vAmbientColor + coloredDiffuse + vSpecularColor;
+          }else{
+            gl_FragColor = vAmbientColor + vDiffuseColor + vSpecularColor;
+          }
+          
+        }
+        
       }
-    }
-  }
-</script>
 
+    </script>
     <!-- Imports external javascript file -->
     <!-- Helper javascript methods for initializing webgl -->
     <script src="lib/webgl-init.js"></script>
@@ -368,6 +364,7 @@
             var lookAtPoint = [gridCenterX - 5, 0.0, gridCenterZ - 5]; // Adjust for grid offset
             var upVector = [0.0, 1.0, 0.0, 0.0];
 
+            
             /* Function for changing the values of the view position */
             function updateEyePosition() {
 
@@ -606,14 +603,40 @@
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null)
         
             /* Sets up the normals of the vertices */
+            
             var normals = [  
-                0.0, 0.0, 1.0, 0.0,     0.0, 0.0, 1.0, 0.0,     0.0, 0.0, 1.0, 0.0,     0.0, 0.0, 1.0, 0.0,  // front
-                0.0, 0.0, -1.0, 0.0,    0.0, 0.0, -1.0, 0.0,    0.0, 0.0, -1.0, 0.0,    0.0, 0.0, -1.0, 0.0,  // front
-                0.0, 1.0, 0.0, 0.0,     0.0, 1.0, 0.0, 0.0,     0.0, 1.0, 0.0, 0.0,     0.0, 1.0, 0.0, 0.0,  // front
-                0.0, -1.0, 0.0, 0.0,    0.0, -1.0, 0.0, 0.0,    0.0, -1.0, 0.0, 0.0,    0.0, -1.0, 0.0, 0.0,  // front
-                1.0, 0.0, 0.0, 0.0,     1.0, 0.0, 0.0, 0.0,     1.0, 0.0, 0.0, 0.0,     1.0, 0.0, 0.0, 0.0,  // right
-                -1.0, 0.0, 0.0, 0.0,    -1.0, 0.0, 0.0, 0.0,    -1.0, 0.0, 0.0, 0.0,    -1.0, 0.0, 0.0, 0.0   // left
+                // Front face (+Z)
+                 0.0,  0.0,  1.0, 0.0,
+                 0.0,  0.0,  1.0, 0.0,
+                 0.0,  0.0,  1.0, 0.0,
+                 0.0,  0.0,  1.0, 0.0,
+                // Back face (-Z)
+                 0.0,  0.0, -1.0, 0.0,
+                 0.0,  0.0, -1.0, 0.0,
+                 0.0,  0.0, -1.0, 0.0,
+                 0.0,  0.0, -1.0, 0.0,
+                // Top face (+Y)
+                 0.0,  1.0,  0.0, 0.0,
+                 0.0,  1.0,  0.0, 0.0,
+                 0.0,  1.0,  0.0, 0.0,
+                 0.0,  1.0,  0.0, 0.0,
+                // Bottom face (-Y)
+                 0.0, -1.0,  0.0, 0.0,
+                 0.0, -1.0,  0.0, 0.0,
+                 0.0, -1.0,  0.0, 0.0,
+                 0.0, -1.0,  0.0, 0.0,
+                // Right face (+X)
+                 1.0,  0.0,  0.0, 0.0,
+                 1.0,  0.0,  0.0, 0.0,
+                 1.0,  0.0,  0.0, 0.0,
+                 1.0,  0.0,  0.0, 0.0,
+                // Left face (-X)
+                -1.0,  0.0,  0.0, 0.0,
+                -1.0,  0.0,  0.0, 0.0,
+                -1.0,  0.0,  0.0, 0.0,
+                -1.0,  0.0,  0.0, 0.0
             ];
+            
 
             /* Binds the normal buffer and load data */
             var normalBuffer = gl.createBuffer();
@@ -653,6 +676,17 @@
             }
 
             window.toggleAnimation = toggleAnimation;
+
+            /* Show normals toggle */
+            const uShowNormalsLocation = gl.getUniformLocation(program, 'uShowNormals');
+            let showNormals = false;
+            function toggleNormals() {
+                showNormals = !showNormals;
+                document.getElementById("normalsbtn").innerText = showNormals ? "HIDE NORMALS" : "SHOW NORMALS";
+                console.log("showing normals")
+            }
+            window.toggleNormals = toggleNormals;
+
             
             // Calculate wave height at position (x,z) at time elapsedTime
             function getWaveHeight(x, z, elapsedTime) {
@@ -705,7 +739,7 @@
             
             // Rotate to orient the boat facing the camera.
             // mat4.rotateX(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(-90));
-            mat4.rotateY(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(90));
+            //mat4.rotateY(boatModelMatrix, boatModelMatrix, glMatrix.toRadian(90));
             // Finally, scale
             mat4.scale(boatModelMatrix, boatModelMatrix, [9, 9, 9]);
             
@@ -794,251 +828,254 @@
             // //Scaling factor
             // gl.uniform3f(uScaleLocation, 0.5, 0.5, 0.5);
 
-function render() {
-    const elapsedTime = performance.now() / 2000;
-
-    // Update time uniform
-    const uTimeLocation = gl.getUniformLocation(program, 'uTime');
-    gl.uniform1f(uTimeLocation, elapsedTime);
-
-    const uUseWaveLocation = gl.getUniformLocation(program, 'uUseWave');
-
-    // Clear screen
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-    // === Wave cubes ===
-    gl.uniform1i(uUseWaveLocation, waveEnabled ? 1 : 0);
-
-    var waveModelMatrix = mat4.create();
-    mat4.scale(waveModelMatrix, waveModelMatrix, [0.5, 0.5, 0.5]);
-    gl.uniformMatrix4fv(uModelMatrixPointer, false, waveModelMatrix);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, verticesBuffer);
-    gl.vertexAttribPointer(aPositionPointer, 4, gl.FLOAT, false, 0, 0);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-    gl.vertexAttribPointer(aNormalPointer, 4, gl.FLOAT, false, 0, 0);
-
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-    ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, instanceCount * instanceCount);
-
-
-
-
-
-    // === Island cubes ===
-    gl.uniform1i(uUseWaveLocation, 0); 
-
-    function drawObject(position, scale, instanceCount) {
-      var islandMatrix = mat4.create();
-      mat4.translate(islandMatrix, islandMatrix, position);
-      mat4.scale(islandMatrix, islandMatrix, scale);
-      gl.uniformMatrix4fv(uModelMatrixPointer, false, islandMatrix);
-      ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, instanceCount);
-    }
+          function render() {
+              const elapsedTime = performance.now() / 2000;
+
+              // Update time uniform
+              const uTimeLocation = gl.getUniformLocation(program, 'uTime');
+              gl.uniform1f(uTimeLocation, elapsedTime);
+
+              const uUseWaveLocation = gl.getUniformLocation(program, 'uUseWave');
+
+              // Clear screen
+              gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+
+              gl.uniform1i(uShowNormalsLocation, showNormals ? 1 : 0);
+              // === Wave cubes ===
+              gl.uniform1i(uUseWaveLocation, waveEnabled ? 1 : 0);
+
+              var waveModelMatrix = mat4.create();
+              mat4.scale(waveModelMatrix, waveModelMatrix, [0.5, 0.5, 0.5]);
+              gl.uniformMatrix4fv(uModelMatrixPointer, false, waveModelMatrix);
+              
+              var normalMatrix = mat4.create();
+              mat4.invert(normalMatrix, waveModelMatrix);
+              mat4.transpose(normalMatrix, normalMatrix);
+              gl.uniformMatrix4fv(uNormalMatrixPtr, false, normalMatrix);
+
+              gl.bindBuffer(gl.ARRAY_BUFFER, verticesBuffer);
+              gl.vertexAttribPointer(aPositionPointer, 4, gl.FLOAT, false, 0, 0);
+
+              gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+              gl.vertexAttribPointer(aNormalPointer, 4, gl.FLOAT, false, 0, 0);
+
+              gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+              ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, instanceCount * instanceCount);
+
+              // === Island cubes ===
+              gl.uniform1i(uUseWaveLocation, 0); 
+
+              function drawObject(position, scale, instanceCount) {
+                var islandMatrix = mat4.create();
+                mat4.translate(islandMatrix, islandMatrix, position);
+                mat4.scale(islandMatrix, islandMatrix, scale);
+                gl.uniformMatrix4fv(uModelMatrixPointer, false, islandMatrix);
+                ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0, instanceCount);
+              }
+
+              var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
+              gl.uniform4fv(uColorLocation, [0.92, 0.76, 0.46, 1.0]);
+
+              const islands = [
+                { pos: [64, 0, 1], scale: [1, 1.2, 1.6], count: 24 },
+                { pos: [62, 0, 1], scale: [1, 1.2, 1.6], count: 21 },
+                { pos: [60, 0, 1], scale: [1, 1.2, 1.6], count: 19 },
+                { pos: [58, 0, 1], scale: [1, 1.2, 1.6], count: 16 },
+                { pos: [56, 0, 1], scale: [1, 1.2, 1.6], count: 10 },
+                { pos: [54, 0, 1], scale: [1, 1.2, 1.6], count: 9 },
+                { pos: [52, 0, 1], scale: [1, 1.2, 1.6], count: 9 },
+                { pos: [50, 0, 1], scale: [1, 1.2, 1.6], count: 8 },
+                { pos: [48, 0, 1], scale: [1, 1.2, 1.6], count: 6 },
+                { pos: [46, 0, 1], scale: [1, 1.2, 1.6], count: 6 },
+                { pos: [44, 0, 1], scale: [1, 1.2, 1.6], count: 6 },
+                { pos: [42, 0, 0], scale: [1, 1.2, 0.6], count: 6 },
+                { pos: [40, 0, 0], scale: [1, 1.2, 0.6], count: 6 },    
+                { pos: [38, 0, 0], scale: [1, 1.2, 0.6], count: 4 },  
+                { pos: [36, 0, 0], scale: [1, 1.2, 0.6], count: 2 },
+                { pos: [34, 0, 0], scale: [1, 1.2, 0.6], count: 2 },
+
+                { pos: [72, 0, 15], scale: [7.6, 1.2, 15.6], count: 1 },
+                { pos: [72, 0, 15], scale: [7.6, 1.2, 15.6], count: 1 },
+
+                { pos: [66, 0, 31], scale: [1, 1.2, 1.6], count: 2 },
+                { pos: [68, 0, 31], scale: [1, 1.2, 1.6], count: 5 },
+                { pos: [70, 0, 31], scale: [1, 1.2, 1.6], count: 7 },
+                { pos: [72, 0, 31], scale: [1, 1.2, 1.6], count: 12 },
+                { pos: [74, 0, 31], scale: [1, 1.2, 1.6], count: 14 },
+                { pos: [76, 0, 31], scale: [1, 1.2, 1.6], count: 15 },
+                { pos: [78, 0, 31], scale: [1.6, 1.2, 1.6], count: 20 },
+                { pos: [79, 0, 31], scale: [0.6, 1.2, 1.6], count: 27 },
+
+                { pos: [54, 0, 55], scale: [1, 1.2, 1], count: 6 },
+                { pos: [56, 0, 54], scale: [1, 1.2, 1], count: 9 },
+                { pos: [58, 0, 53], scale: [1, 1.2, 1], count: 14 },
+                { pos: [60, 0, 51], scale: [1, 1.2, 1], count: 17 },
+                { pos: [62, 0, 50], scale: [1, 1.2, 1], count: 19 },
+                { pos: [64, 0, 50], scale: [1, 1.2, 1], count: 19 },
+                { pos: [66, 0, 50], scale: [1, 1.2, 1], count: 16 },
+                { pos: [68, 0, 51], scale: [1, 1.2, 1], count: 12 },
+                { pos: [70, 0, 52], scale: [1, 1.2, 1], count: 8 },
+
+                { pos: [1, 0, 28], scale: [1.6, 1.2, 12], count: 12 },
+                { pos: [3, 0, 20], scale: [1.6, 1.2, 1], count: 30 },
+                { pos: [5, 0, 22], scale: [1.6, 1.2, 1], count: 26 },
+                { pos: [7, 0, 22], scale: [1.6, 1.2, 1], count: 23 },
+                { pos: [9, 0, 27], scale: [1.6, 1.2, 1], count: 18 },
+                { pos: [11, 0, 28], scale: [1.6, 1.2, 1], count: 15 },
+              ];
+
+              islands.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
+
+
+
+              // === Tree ===
+              var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
+              gl.uniform4fv(uColorLocation, [0.55, 0.27, 0.07, 1.0]);
 
-    var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
-    gl.uniform4fv(uColorLocation, [0.92, 0.76, 0.46, 1.0]);
+              const trunks = [
+                { pos: [56, 5, 4], scale: [0.7, 5, 0.7], count: 1 },
+                { pos: [68, 9, 12], scale: [1, 9, 1], count: 1 },
+                { pos: [75, 5, 18], scale: [0.7, 5, 0.7], count: 1 },
+                { pos: [65, 5, 53], scale: [0.7, 5, 0.7], count: 1 },
+                { pos: [76, 11, 6], scale: [1, 11, 1], count: 1 },
+                { pos: [65, 4, 19], scale: [0.7, 4, 0.7], count: 1 },
+                { pos: [76, 4, 36], scale: [0.7, 4, 0.7], count: 1 },
+                { pos: [45, 3, 2], scale: [0.7, 5, 0.7], count: 1 },
+                { pos: [4, 5, 44], scale: [0.7, 5, 0.7], count: 1 },
+              ];
 
-    const islands = [
-      { pos: [64, 0, 1], scale: [1, 1.2, 1.6], count: 24 },
-      { pos: [62, 0, 1], scale: [1, 1.2, 1.6], count: 21 },
-      { pos: [60, 0, 1], scale: [1, 1.2, 1.6], count: 19 },
-      { pos: [58, 0, 1], scale: [1, 1.2, 1.6], count: 16 },
-      { pos: [56, 0, 1], scale: [1, 1.2, 1.6], count: 10 },
-      { pos: [54, 0, 1], scale: [1, 1.2, 1.6], count: 9 },
-      { pos: [52, 0, 1], scale: [1, 1.2, 1.6], count: 9 },
-      { pos: [50, 0, 1], scale: [1, 1.2, 1.6], count: 8 },
-      { pos: [48, 0, 1], scale: [1, 1.2, 1.6], count: 6 },
-      { pos: [46, 0, 1], scale: [1, 1.2, 1.6], count: 6 },
-      { pos: [44, 0, 1], scale: [1, 1.2, 1.6], count: 6 },
-      { pos: [42, 0, 0], scale: [1, 1.2, 0.6], count: 6 },
-      { pos: [40, 0, 0], scale: [1, 1.2, 0.6], count: 6 },    
-      { pos: [38, 0, 0], scale: [1, 1.2, 0.6], count: 4 },  
-      { pos: [36, 0, 0], scale: [1, 1.2, 0.6], count: 2 },
-      { pos: [34, 0, 0], scale: [1, 1.2, 0.6], count: 2 },
+              trunks.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
 
-      { pos: [72, 0, 15], scale: [7.6, 1.2, 15.6], count: 1 },
-      { pos: [72, 0, 15], scale: [7.6, 1.2, 15.6], count: 1 },
 
-      { pos: [66, 0, 31], scale: [1, 1.2, 1.6], count: 2 },
-      { pos: [68, 0, 31], scale: [1, 1.2, 1.6], count: 5 },
-      { pos: [70, 0, 31], scale: [1, 1.2, 1.6], count: 7 },
-      { pos: [72, 0, 31], scale: [1, 1.2, 1.6], count: 12 },
-      { pos: [74, 0, 31], scale: [1, 1.2, 1.6], count: 14 },
-      { pos: [76, 0, 31], scale: [1, 1.2, 1.6], count: 15 },
-      { pos: [78, 0, 31], scale: [1.6, 1.2, 1.6], count: 20 },
-      { pos: [79, 0, 31], scale: [0.6, 1.2, 1.6], count: 27 },
 
-      { pos: [54, 0, 55], scale: [1, 1.2, 1], count: 6 },
-      { pos: [56, 0, 54], scale: [1, 1.2, 1], count: 9 },
-      { pos: [58, 0, 53], scale: [1, 1.2, 1], count: 14 },
-      { pos: [60, 0, 51], scale: [1, 1.2, 1], count: 17 },
-      { pos: [62, 0, 50], scale: [1, 1.2, 1], count: 19 },
-      { pos: [64, 0, 50], scale: [1, 1.2, 1], count: 19 },
-      { pos: [66, 0, 50], scale: [1, 1.2, 1], count: 16 },
-      { pos: [68, 0, 51], scale: [1, 1.2, 1], count: 12 },
-      { pos: [70, 0, 52], scale: [1, 1.2, 1], count: 8 },
+              
+              var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
+              gl.uniform4fv(uColorLocation, [0.13, 0.55, 0.13, 1.0]);
 
-      { pos: [1, 0, 28], scale: [1.6, 1.2, 12], count: 12 },
-      { pos: [3, 0, 20], scale: [1.6, 1.2, 1], count: 30 },
-      { pos: [5, 0, 22], scale: [1.6, 1.2, 1], count: 26 },
-      { pos: [7, 0, 22], scale: [1.6, 1.2, 1], count: 23 },
-      { pos: [9, 0, 27], scale: [1.6, 1.2, 1], count: 18 },
-      { pos: [11, 0, 28], scale: [1.6, 1.2, 1], count: 15 },
-    ];
+              const leaves = [
+                { pos: [56, 12, 4], scale: [3, 2, 3], count: 1 },
+                { pos: [56, 14, 4], scale: [2, 2, 2], count: 1 },
 
-    islands.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
+                { pos: [68, 16, 12], scale: [4, 2, 4], count: 1 },
+                { pos: [68, 18, 12], scale: [3, 2, 3], count: 1 },
 
+                { pos: [75, 12, 18], scale: [3, 2, 3], count: 1 },
+                { pos: [75, 14, 18], scale: [2, 2, 2], count: 1 },
 
+                { pos: [65, 12, 53], scale: [3, 2, 3], count: 1 },
+                { pos: [65, 14, 53], scale: [2, 2, 2], count: 1 },
 
-    // === Tree ===
-    var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
-    gl.uniform4fv(uColorLocation, [0.55, 0.27, 0.07, 1.0]);
+                { pos: [76, 19, 6], scale: [4, 2, 4], count: 1 },
+                { pos: [76, 21, 6], scale: [3, 2, 3], count: 1 },
 
-    const trunks = [
-      { pos: [56, 5, 4], scale: [0.7, 5, 0.7], count: 1 },
-      { pos: [68, 9, 12], scale: [1, 9, 1], count: 1 },
-      { pos: [75, 5, 18], scale: [0.7, 5, 0.7], count: 1 },
-      { pos: [65, 5, 53], scale: [0.7, 5, 0.7], count: 1 },
-      { pos: [76, 11, 6], scale: [1, 11, 1], count: 1 },
-      { pos: [65, 4, 19], scale: [0.7, 4, 0.7], count: 1 },
-      { pos: [76, 4, 36], scale: [0.7, 4, 0.7], count: 1 },
-      { pos: [45, 3, 2], scale: [0.7, 5, 0.7], count: 1 },
-      { pos: [4, 5, 44], scale: [0.7, 5, 0.7], count: 1 },
-    ];
+                { pos: [65, 10, 19], scale: [3, 2, 3], count: 1 },
+                { pos: [65, 12, 19], scale: [2, 2, 2], count: 1 },
 
-    trunks.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
+                { pos: [76, 10, 36], scale: [3, 2, 3], count: 1 },
+                { pos: [76, 12, 36], scale: [2, 2, 2], count: 1 },
 
+                { pos: [45, 9, 2], scale: [3, 2, 3], count: 1 },
+                { pos: [45, 11, 2], scale: [2, 2, 2], count: 1 },
 
+                { pos: [4, 9, 44], scale: [3, 2, 3], count: 1 },
+                { pos: [4, 11, 44], scale: [2, 2, 2], count: 1 },
+                
+              ];
 
-    
-    var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
-    gl.uniform4fv(uColorLocation, [0.13, 0.55, 0.13, 1.0]);
+              leaves.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
 
-    const leaves = [
-      { pos: [56, 12, 4], scale: [3, 2, 3], count: 1 },
-      { pos: [56, 14, 4], scale: [2, 2, 2], count: 1 },
+              
+              var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
+              gl.uniform4fv(uColorLocation, [0.49, 0.5, 0.49, 1.0]);
 
-      { pos: [68, 16, 12], scale: [4, 2, 4], count: 1 },
-      { pos: [68, 18, 12], scale: [3, 2, 3], count: 1 },
+              const rocks = [
+                { pos: [12, 1, 67], scale: [5, 1, 5], count: 1 },
+                { pos: [17, 1, 67], scale: [3, 2.5, 3], count: 1 },
+                { pos: [14, 1, 69], scale: [4, 4, 4], count: 1 },
+                { pos: [14, 1, 69], scale: [3, 6, 3], count: 1 },
+                { pos: [12.5, 1, 68.5], scale: [4, 1.5, 6], count: 1 },
+                { pos: [11, 1, 67], scale: [3, 5, 4], count: 1 },
 
-      { pos: [75, 12, 18], scale: [3, 2, 3], count: 1 },
-      { pos: [75, 14, 18], scale: [2, 2, 2], count: 1 },
+                { pos: [24, 1, 74], scale: [2, 1, 2], count: 1 },
+                { pos: [23, 1, 75], scale: [1.5, 2.5, 1], count: 1 },
+                { pos: [24.5, 1, 75.5], scale: [2, 1.5, 1.5], count: 1 },
 
-      { pos: [65, 12, 53], scale: [3, 2, 3], count: 1 },
-      { pos: [65, 14, 53], scale: [2, 2, 2], count: 1 },
+                { pos: [68, 1, 30], scale: [1, 1, 1], count: 1 },
+                { pos: [68, 1, 31], scale: [1, 2, 1], count: 1 },
+                { pos: [68.5, 1, 31.5], scale: [1, 1.5, 1], count: 1 },
 
-      { pos: [76, 19, 6], scale: [4, 2, 4], count: 1 },
-      { pos: [76, 21, 6], scale: [3, 2, 3], count: 1 },
+                { pos: [60, 1, 56], scale: [1, 1, 1], count: 1 },
+                { pos: [60, 1, 57], scale: [1, 2, 1], count: 1 },
+                { pos: [60.5, 1, 57.5], scale: [1, 1.5, 1], count: 1 },
 
-      { pos: [65, 10, 19], scale: [3, 2, 3], count: 1 },
-      { pos: [65, 12, 19], scale: [2, 2, 2], count: 1 },
+                { pos: [63.5, 1, 59.5], scale: [0.6, 0.8, 0.5], count: 1 },
+                { pos: [64, 1, 58.5], scale: [0.6, 1, 0.8], count: 1 },
 
-      { pos: [76, 10, 36], scale: [3, 2, 3], count: 1 },
-      { pos: [76, 12, 36], scale: [2, 2, 2], count: 1 },
+                { pos: [77, 1, 42], scale: [0.8, 0.8, 0.8], count: 1 },
+                { pos: [77, 1, 43], scale: [0.8, 1.5, 0.8], count: 1 },
+                { pos: [77.5, 1, 43.5], scale: [0.8, 1, 0.8], count: 1 },
 
-      { pos: [45, 9, 2], scale: [3, 2, 3], count: 1 },
-      { pos: [45, 11, 2], scale: [2, 2, 2], count: 1 },
+                { pos: [4, 1, 25], scale: [0.8, 0.8, 0.8], count: 2 },
+                { pos: [5, 1, 25], scale: [0.8, 1.8, 0.8], count: 1 },
+                { pos: [5, 1, 26], scale: [0.8, 2.5, 0.8], count: 1 },
+                { pos: [5.5, 1, 26.5], scale: [0.8, 1.6, 1], count: 1 },
 
-      { pos: [4, 9, 44], scale: [3, 2, 3], count: 1 },
-      { pos: [4, 11, 44], scale: [2, 2, 2], count: 1 },
-      
-    ];
+                { pos: [4, 1, 30], scale: [0.7, 1, 0.7], count: 1 },
 
-    leaves.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
 
-    
-    var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
-    gl.uniform4fv(uColorLocation, [0.49, 0.5, 0.49, 1.0]);
+              ];
 
-    const rocks = [
-      { pos: [12, 1, 67], scale: [5, 1, 5], count: 1 },
-      { pos: [17, 1, 67], scale: [3, 2.5, 3], count: 1 },
-      { pos: [14, 1, 69], scale: [4, 4, 4], count: 1 },
-      { pos: [14, 1, 69], scale: [3, 6, 3], count: 1 },
-      { pos: [12.5, 1, 68.5], scale: [4, 1.5, 6], count: 1 },
-      { pos: [11, 1, 67], scale: [3, 5, 4], count: 1 },
+              rocks.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
 
-      { pos: [24, 1, 74], scale: [2, 1, 2], count: 1 },
-      { pos: [23, 1, 75], scale: [1.5, 2.5, 1], count: 1 },
-      { pos: [24.5, 1, 75.5], scale: [2, 1.5, 1.5], count: 1 },
 
-      { pos: [68, 1, 30], scale: [1, 1, 1], count: 1 },
-      { pos: [68, 1, 31], scale: [1, 2, 1], count: 1 },
-      { pos: [68.5, 1, 31.5], scale: [1, 1.5, 1], count: 1 },
 
-      { pos: [60, 1, 56], scale: [1, 1, 1], count: 1 },
-      { pos: [60, 1, 57], scale: [1, 2, 1], count: 1 },
-      { pos: [60.5, 1, 57.5], scale: [1, 1.5, 1], count: 1 },
 
-      { pos: [63.5, 1, 59.5], scale: [0.6, 0.8, 0.5], count: 1 },
-      { pos: [64, 1, 58.5], scale: [0.6, 1, 0.8], count: 1 },
+              var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
+              gl.uniform4fv(uColorLocation, [1.0, 0.0, 0.0, 1.0]);
 
-      { pos: [77, 1, 42], scale: [0.8, 0.8, 0.8], count: 1 },
-      { pos: [77, 1, 43], scale: [0.8, 1.5, 0.8], count: 1 },
-      { pos: [77.5, 1, 43.5], scale: [0.8, 1, 0.8], count: 1 },
+              const spots = [
+                { pos: [62, 1, 63], scale: [2, 0.3, 0.3], count: 1 },
+                { pos: [62, 1, 63], scale: [0.3, 0.3, 2], count: 1 },
+              ];
 
-      { pos: [4, 1, 25], scale: [0.8, 0.8, 0.8], count: 2 },
-      { pos: [5, 1, 25], scale: [0.8, 1.8, 0.8], count: 1 },
-      { pos: [5, 1, 26], scale: [0.8, 2.5, 0.8], count: 1 },
-      { pos: [5.5, 1, 26.5], scale: [0.8, 1.6, 1], count: 1 },
+              spots.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
 
-      { pos: [4, 1, 30], scale: [0.7, 1, 0.7], count: 1 },
 
 
-    ];
+              var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
+              gl.uniform4fv(uColorLocation, [0.5, 0.3, 0.25, 1.0]);
 
-    rocks.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
+              const decks = [
+                { pos: [15, 0, 32], scale: [4.5, 1.1, 1], count: 4 },
+                { pos: [19, 0, 31], scale: [0.4, 2, 0.4], count: 1 },
+                { pos: [19, 0, 36], scale: [0.4, 2, 0.4], count: 1 },
+                { pos: [12.5, 0, 31], scale: [0.4, 2, 0.4], count: 1 },
+                { pos: [12.5, 0, 36], scale: [0.4, 2, 0.4], count: 1 },
+              ];
 
+              decks.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
 
 
 
-    var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
-    gl.uniform4fv(uColorLocation, [1.0, 0.0, 0.0, 1.0]);
+              // === Boat ===
+              gl.uniform1i(uUseWaveLocation, waveEnabled ? 1 : 0);
+              const originalColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
+              const originalColor = [0.0, 0.850, 1.0, 1.0];
 
-    const spots = [
-      { pos: [62, 1, 63], scale: [2, 0.3, 0.3], count: 1 },
-      { pos: [62, 1, 63], scale: [0.3, 0.3, 2], count: 1 },
-    ];
+              gl.activeTexture(gl.TEXTURE0);
+              gl.bindTexture(gl.TEXTURE_2D, wakeboardTexture);
+              gl.uniform1i(uTextureLocation, 0);
+              gl.uniform1i(uUseTextureLocation, true);
 
-    spots.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
-
-
-
-    var uColorLocation = gl.getUniformLocation(program, 'uMaterialDiffuseColor');
-    gl.uniform4fv(uColorLocation, [0.5, 0.3, 0.25, 1.0]);
-
-    const decks = [
-      { pos: [15, 0, 32], scale: [4.5, 1.1, 1], count: 4 },
-      { pos: [19, 0, 31], scale: [0.4, 2, 0.4], count: 1 },
-      { pos: [19, 0, 36], scale: [0.4, 2, 0.4], count: 1 },
-      { pos: [12.5, 0, 31], scale: [0.4, 2, 0.4], count: 1 },
-      { pos: [12.5, 0, 36], scale: [0.4, 2, 0.4], count: 1 },
-    ];
-
-    decks.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
-
-
-
-
-    // === Boat ===
-    gl.uniform1i(uUseWaveLocation, waveEnabled ? 1 : 0);
-    const originalColorPtr = gl.getUniformLocation(program, "uMaterialDiffuseColor");
-    const originalColor = [0.0, 0.850, 1.0, 1.0];
-
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, wakeboardTexture);
-    gl.uniform1i(uTextureLocation, 0);
-    gl.uniform1i(uUseTextureLocation, true);
-
-    gl.uniform4f(originalColorPtr, 0.5, 0.3, 0.25, 1.0); // Boat color
-    renderBoat();
-    gl.uniform4fv(originalColorPtr, new Float32Array(originalColor)); // Reset color
-    gl.uniform1i(uUseTextureLocation, false);
-    // Loop
-    requestAnimationFrame(render);
-}
+              gl.uniform4f(originalColorPtr, 0.5, 0.3, 0.25, 1.0); // Boat color
+              renderBoat();
+              gl.uniform4fv(originalColorPtr, new Float32Array(originalColor)); // Reset color
+              gl.uniform1i(uUseTextureLocation, false);
+              // Loop
+              requestAnimationFrame(render);
+              gl.uniform1i(uShowNormalsLocation, showNormals ? 1 : 0);
+            }
 
 
 
@@ -1082,6 +1119,8 @@ function render() {
             };
 
             window.toggleLighting = toggleLighting;
+            
+
             
             
 
@@ -1175,6 +1214,8 @@ function render() {
         <input type="file" id="textureUpload" accept="image/*" />
         <button onclick="loadCustomTexture()">Apply Texture</button>
         </div>
+
+        <button id="normalsbtn" onclick="toggleNormals()">SHOW NORMALS</button>
       </div>
 
 
