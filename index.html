@@ -66,40 +66,18 @@
 
 
         // Apply instance position and wave height
-        mat4 modelMatrix = uModelMatrix;
-        modelMatrix[3].xyz += vec3(aInstancePosition.x, waveHeight, aInstancePosition.y);
+        vec4 worldPosition = uModelMatrix * aPosition;
+        worldPosition.xyz += vec3(aInstancePosition.x, waveHeight, aInstancePosition.y);
+        gl_Position = uProjectionMatrix * uViewMatrix * worldPosition;
 
-        // Create instance translation
-        mat4 instanceTranslate = mat4(
-          1.0, 0.0, 0.0, 0.0,
-          0.0, 1.0, 0.0, 0.0,
-          0.0, 0.0, 1.0, 0.0,
-          aInstancePosition.x, waveHeight, aInstancePosition.y, 1.0
-        );
-
-        // Apply scaling
-        /*mat4 scaleMatrix = mat4(
-          uScale.x, 0.0, 0.0, 0.0,
-          0.0, uScale.y, 0.0, 0.0,
-          0.0, 0.0, uScale.z, 0.0,
-          0.0, 0.0, 0.0, 1.0
-        );*/
-        // modelMatrix = modelMatrix * scaleMatrix;
-
-        // Transform vertex position
-        gl_Position = uProjectionMatrix * uViewMatrix * modelMatrix * aPosition;
-          
-        //Ambient
+        // Lighting calculations
         vec4 ambient = uAmbientStrength * uLightColor;
-
-        //Diffuse
-        
         vec4 corrected_aNormal = uNormalMatrix * aNormal;
         vec4 normalized_aNormalVector = normalize(corrected_aNormal);
         vec4 normalized_uLightDirectionVector = normalize(uLightDirectionVector);
         float lambertCoefficient = max(dot(normalized_uLightDirectionVector, normalized_aNormalVector), 0.0);
 
-        //Specular
+        // Specular
         vec4 viewPos = uViewMatrix * uModelMatrix * aPosition;
         vec4 normalized_uEyeVector = normalize(-viewPos); 
         vec4 normalized_uReflectedLightVector = normalize(2.0 * dot(normalized_uLightDirectionVector,normalized_aNormalVector) * normalized_aNormalVector - normalized_uLightDirectionVector);
@@ -109,15 +87,14 @@
         vec4 ambientColor = ambient * uLightColor * uMaterialDiffuseColor;
         vec4 specularColor = uSpecularStrength * specular * uLightColor * uMaterialDiffuseColor;
         vec4 diffuseColor =  lambertCoefficient * uLightColor * uMaterialDiffuseColor ;
-        
-        vAmbientColor = vec4(ambientColor.r, ambientColor.g, ambientColor.b, 1.0);
-        vSpecularColor = vec4(specularColor.r, specularColor.g, specularColor.b, 1.0);
-        vDiffuseColor = vec4(diffuseColor.r, diffuseColor.g, diffuseColor.b, 1.0);
-        vTexCoord = aTexCoord;  // Pass texture coordinates to fragment shader
 
+        vAmbientColor = vec4(ambientColor.rgb, 1.0);
+        vSpecularColor = vec4(specularColor.rgb, 1.0);
+        vDiffuseColor = vec4(diffuseColor.rgb, 1.0);
+        vTexCoord = aTexCoord;
 
-        //for normal visualization
-        vNormal = uNormalMatrix * aNormal;
+        // For normal visualization
+        vNormal = corrected_aNormal;
       }
     </script>
 
@@ -153,9 +130,9 @@
         vec4 coloredDiffuse = vec4(dynamicDiffuse * diffuseIntensity, 1.0);
 
         if (uShowNormals) {
-          // Map normal from [-1,1] to [0,1] for display
-          vec4 normalColor = vNormal * 0.5 + 0.5;
-          gl_FragColor = normalColor;
+          // Map normalized normal from [-1,1] to [0,1] for display
+          vec3 normalColor = normalize(vNormal.xyz) * 0.5 + 0.5;
+          gl_FragColor = vec4(normalColor, 1.0);
           return;
         }
         
@@ -627,14 +604,40 @@
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null)
         
             /* Sets up the normals of the vertices */
+            
             var normals = [  
-                0.0, 0.0, 1.0, 0.0,     0.0, 0.0, 1.0, 0.0,     0.0, 0.0, 1.0, 0.0,     0.0, 0.0, 1.0, 0.0,  // front
-                0.0, 0.0, -1.0, 0.0,    0.0, 0.0, -1.0, 0.0,    0.0, 0.0, -1.0, 0.0,    0.0, 0.0, -1.0, 0.0,  // front
-                0.0, 1.0, 0.0, 0.0,     0.0, 1.0, 0.0, 0.0,     0.0, 1.0, 0.0, 0.0,     0.0, 1.0, 0.0, 0.0,  // front
-                0.0, -1.0, 0.0, 0.0,    0.0, -1.0, 0.0, 0.0,    0.0, -1.0, 0.0, 0.0,    0.0, -1.0, 0.0, 0.0,  // front
-                1.0, 0.0, 0.0, 0.0,     1.0, 0.0, 0.0, 0.0,     1.0, 0.0, 0.0, 0.0,     1.0, 0.0, 0.0, 0.0,  // right
-                -1.0, 0.0, 0.0, 0.0,    -1.0, 0.0, 0.0, 0.0,    -1.0, 0.0, 0.0, 0.0,    -1.0, 0.0, 0.0, 0.0   // left
+                // Front face (+Z)
+                 0.0,  0.0,  1.0, 0.0,
+                 0.0,  0.0,  1.0, 0.0,
+                 0.0,  0.0,  1.0, 0.0,
+                 0.0,  0.0,  1.0, 0.0,
+                // Back face (-Z)
+                 0.0,  0.0, -1.0, 0.0,
+                 0.0,  0.0, -1.0, 0.0,
+                 0.0,  0.0, -1.0, 0.0,
+                 0.0,  0.0, -1.0, 0.0,
+                // Top face (+Y)
+                 0.0,  1.0,  0.0, 0.0,
+                 0.0,  1.0,  0.0, 0.0,
+                 0.0,  1.0,  0.0, 0.0,
+                 0.0,  1.0,  0.0, 0.0,
+                // Bottom face (-Y)
+                 0.0, -1.0,  0.0, 0.0,
+                 0.0, -1.0,  0.0, 0.0,
+                 0.0, -1.0,  0.0, 0.0,
+                 0.0, -1.0,  0.0, 0.0,
+                // Right face (+X)
+                 1.0,  0.0,  0.0, 0.0,
+                 1.0,  0.0,  0.0, 0.0,
+                 1.0,  0.0,  0.0, 0.0,
+                 1.0,  0.0,  0.0, 0.0,
+                // Left face (-X)
+                -1.0,  0.0,  0.0, 0.0,
+                -1.0,  0.0,  0.0, 0.0,
+                -1.0,  0.0,  0.0, 0.0,
+                -1.0,  0.0,  0.0, 0.0
             ];
+            
 
             /* Binds the normal buffer and load data */
             var normalBuffer = gl.createBuffer();
@@ -846,6 +849,11 @@
               var waveModelMatrix = mat4.create();
               mat4.scale(waveModelMatrix, waveModelMatrix, [0.5, 0.5, 0.5]);
               gl.uniformMatrix4fv(uModelMatrixPointer, false, waveModelMatrix);
+              
+              var normalMatrix = mat4.create();
+              mat4.invert(normalMatrix, waveModelMatrix);
+              mat4.transpose(normalMatrix, normalMatrix);
+              gl.uniformMatrix4fv(uNormalMatrixPtr, false, normalMatrix);
 
               gl.bindBuffer(gl.ARRAY_BUFFER, verticesBuffer);
               gl.vertexAttribPointer(aPositionPointer, 4, gl.FLOAT, false, 0, 0);
@@ -1048,7 +1056,6 @@
               ];
 
               decks.forEach(({ pos, scale, count }) => drawObject(pos, scale, count));
-
 
 
 
